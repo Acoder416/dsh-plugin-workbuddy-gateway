@@ -62,7 +62,42 @@ WorkBuddy 不提供官方 OpenAI 兼容 API：额度绑在订阅账号上，只�
 
 ## 安装
 
-**bundle 装法（推荐）** —— 包名进 `dsh.profile.bundles`，**需要重启 dsh 才生效**：
+### 先澄清一件事：「bundle」不是插件市场专用
+
+容易误会，但两者没关系。**bundle 就是 DSH 组合 profile 的通用单位**：一个包只要在自己的
+`package.json` 里声明了
+
+```jsonc
+"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+```
+
+它就是一个 bundle，包名可以写进 profile 的 `dsh.profile.bundles` 数组。DSH 启动时按数组顺序
+把每个 bundle 的 patch 应用到空的条目树上。
+
+`dshmarket`（插件市场界面）**自己也只是这个数组里的一项** —— 和本插件是同级，不是父子关系：
+
+```jsonc
+"bundles": [
+  "@deepseek-ai/dsh-base",
+  "@deepseek-ai/dsh-web-app",
+  "dshmarket",                      // ← 市场，也是一个 bundle
+  "dsh-plugin-workbuddy-gateway"    // ← 本插件，平级
+]
+```
+
+解析方式是普通的 Node 包解析（先找 dsh 安装目录，再找 profile 目录），**不经过任何注册表或市场**。
+另外 `dsh plugin --profile web add <pkg>` 也不是市场命令，它只是把参数原样转发给 profile 目录下的 pnpm：
+
+```
+dsh plugin --profile tui add <package>     install a plugin into the tui profile
+[args...]  pnpm arguments, forwarded verbatim (add <pkg>, remove <pkg>, why <pkg>, ...)
+```
+
+一句话：市场是**安装的一种入口**，bundle 是**加载的机制**。手工把包名写进 `bundles` 走的是同一个机制。
+
+### 装法一：bundle 层（推荐）
+
+包名进 `dsh.profile.bundles`，**需要重启 dsh**（bundle 层只在启动时解析一次）：
 
 ```jsonc
 // $DSH_HOME/profiles/web/package.json
@@ -86,8 +121,29 @@ pnpm add github:Acoder416/dsh-plugin-workbuddy-gateway
 pnpm --dir $env:USERPROFILE\.dsh\profiles\web install
 ```
 
-⚠️ **不要**再在 `cordis.patch.yml` 里写一条 `insert`：bundle 层已经插过一次，同 id 插两次会让 dsh
-起不来（`duplicate loader entry id: workbuddy-gateway`）。装法二选一。
+### 装法二：手动 patch 层（不写 bundles）
+
+包名**不**进 `bundles`，改为在 profile 的 patch 文件里显式 insert：
+
+```yaml
+# $DSH_HOME/profiles/web/cordis.patch.yml
+- insert:
+    - id: workbuddy-gateway
+      name: dsh-plugin-workbuddy-gateway
+```
+
+custom profile 的 `patchReload` 默认是 `live`，所以这条 insert **不用重启就能挂载**（代价是改动
+client 半仍需刷新页面）。
+
+### ⚠️ 两种装法只能选一个
+
+**不要同时用。** 同一个 id 被插入两次会让 dsh 直接起不来：
+
+```
+duplicate loader entry id: workbuddy-gateway
+```
+
+所以：`bundles` 里有它，就**不要**再在 `cordis.patch.yml` 里写 `insert`；反之亦然。
 
 ## 运行时状态放在哪
 

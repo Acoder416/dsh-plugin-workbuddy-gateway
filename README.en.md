@@ -89,9 +89,61 @@ pnpm --dir "$DSH_HOME/profiles/web" add github:Acoder416/dsh-plugin-workbuddy-ga
 
 Then add the package name to `dsh.profile.bundles` and restart dsh.
 
-> **Do not also add an `insert` for this plugin in `cordis.patch.yml`.** The
-> bundle layer already inserts it, and inserting the same loader id twice is
-> fatal: `duplicate loader entry id: workbuddy-gateway`.
+### "Bundle" is not a plugin-market feature
+
+Worth clearing up, because the names invite the mistake. A **bundle is simply
+DSH's unit of profile composition**: any package whose manifest declares
+
+```jsonc
+"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+```
+
+is a bundle, and its package name can go in the profile's `dsh.profile.bundles`
+array. At startup DSH applies each bundle's patch list, in array order, over an
+empty entry tree.
+
+`dshmarket` — the market UI plugin — **is itself just one entry in that array**,
+a sibling of this plugin rather than a parent of it:
+
+```jsonc
+"bundles": [
+  "@deepseek-ai/dsh-base",
+  "@deepseek-ai/dsh-web-app",
+  "dshmarket",                      // the market, itself a bundle
+  "dsh-plugin-workbuddy-gateway"    // this plugin, same level
+]
+```
+
+Resolution is ordinary Node package resolution (the dsh installation first, then
+the profile directory) — **no registry and no market involved**. And
+`dsh plugin --profile web add <pkg>` is not a market command either; it forwards
+its arguments verbatim to pnpm in the profile directory:
+
+```
+dsh plugin --profile tui add <package>     install a plugin into the tui profile
+[args...]  pnpm arguments, forwarded verbatim (add <pkg>, remove <pkg>, why <pkg>, ...)
+```
+
+In short: the market is one way to *install*; a bundle is the mechanism that
+*loads*. Writing the package name into `bundles` by hand uses the same mechanism.
+
+### The alternative: a manual patch entry
+
+Instead of `bundles`, insert the plugin from the profile's own patch file:
+
+```yaml
+# $DSH_HOME/profiles/web/cordis.patch.yml
+- insert:
+    - id: workbuddy-gateway
+      name: dsh-plugin-workbuddy-gateway
+```
+
+A custom profile's `patchReload` defaults to `live`, so this entry mounts
+**without a restart** (a client-half change still needs a page refresh).
+
+> **Pick one method, never both.** Inserting the same loader id twice is fatal:
+> `duplicate loader entry id: workbuddy-gateway`. If the name is in `bundles`, do
+> not also `insert` it, and vice versa.
 
 ## Using it
 
