@@ -102,5 +102,26 @@ check(`scanned shipped JS for absolute paths (${String(scanned.length)} file(s))
 const patch = readFileSync(join(root, pkg.dsh?.bundle?.patch ?? 'cordis.patch.yml'), 'utf8')
 check('the bundle patch inserts this package', patch.includes(pkg.name), `expected ${pkg.name}`)
 
+// A README that advertises a translation has to link to a file that exists, and
+// the translation has to link back. A dangling "English" promise is exactly the
+// kind of thing that ships because nothing checks it.
+const chinese = readFileSync(join(root, 'README.md'), 'utf8')
+const english = readFileSync(join(root, 'README.en.md'), 'utf8')
+const chineseLink = /\[English\]\(([^)]+)\)/.exec(chinese)
+const englishLink = /\[中文\]\(([^)]+)\)/.exec(english)
+check('the Chinese README links an English version', chineseLink !== null)
+if (chineseLink !== null) {
+  check('that link resolves', existsSync(join(root, chineseLink[1])), chineseLink[1])
+}
+check('the English README links back to the Chinese one', englishLink !== null)
+if (englishLink !== null) {
+  check('that link resolves', existsSync(join(root, englishLink[1])), englishLink[1])
+}
+
+// Both READMEs ship, or a reader following the link gets a 404 from the tarball.
+for (const name of ['README.md', 'README.en.md']) {
+  check(`files covers ${name}`, entries.includes(name))
+}
+
 console.log(failed ? '\nRESULT: FAILED' : '\nRESULT: OK')
 process.exit(failed ? 1 : 0)

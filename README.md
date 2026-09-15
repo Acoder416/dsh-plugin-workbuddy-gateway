@@ -3,7 +3,7 @@
 把 WorkBuddy（[www.workbuddy.ai](https://www.workbuddy.ai) 国际版 / codebuddy.cn 国内版）的**订阅额度**
 接进 DSH，并且在**设置页**里管理它。
 
-中文 | English
+中文 | [English](README.en.md)
 
 ---
 

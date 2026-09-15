@@ -3,6 +3,14 @@
   "version": "0.1.1",
   "description": "WorkBuddy (workbuddy.ai / codebuddy.cn) subscription quota as a DSH model provider: supervises the local OpenAI-compatible gateway and exposes it as a settings page.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git"
+  },
+  "homepage": "https://github.com/Acoder416/dsh-plugin-workbuddy-gateway#readme",
+  "bugs": {
+    "url": "https://github.com/Acoder416/dsh-plugin-workbuddy-gateway/issues"
+  },
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -16,6 +24,7 @@
     "scripts",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
