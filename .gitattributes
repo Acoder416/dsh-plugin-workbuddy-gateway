@@ -1,0 +1,20 @@
+# Normalise line endings so a Windows checkout and a Linux one produce the same
+# bytes. Without this, Git's autocrlf rewrites text files on checkout and the
+# vendored Python (a verbatim copy of upstream) stops being verbatim — which
+# matters, because THIRD_PARTY_NOTICES claims it is unmodified.
+
+* text=auto eol=lf
+
+# The vendored gateway is upstream's code. Keep it byte-identical.
+vendor/** -text
+
+# Binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+
+# Generated Python bytecode, never tracked.
+*.pyc binary

@@ -1,0 +1,89 @@
+name: ci
+
+# Two jobs on purpose.
+#
+# `unit` needs nothing but Node: it covers the gateway supervisor, the settings
+# normalization, the HTTP routes, the provider-route derivation, and the schema
+# shape. That is the fast signal for every pushed change.
+#
+# `integration` additionally checks this plugin against a real DSH checkout. It
+# is the only way to catch the class of breakage that motivated most of this
+# plugin's tests — the harness's own settings service refusing a schema, or a
+# path-level write touching a sibling route. It is pinned to a DSH revision
+# because it asserts against harness internals that move; bump DS_REF when you
+# verify against a newer harness.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Revision of the harness used by the integration job. Bump deliberately.
+  DSH_REF: main
+
+jobs:
+  unit:
+    name: unit tests and package check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.19'
+
+      - name: Pre-publish package check
+        run: node scripts/check-package.mjs
+
+      - name: Syntax-check every shipped module
+        run: |
+          set -euo pipefail
+          for file in src/*.js src/client/*.js scripts/*.mjs tests/*.mjs tests/*.js; do
+            [ -e "$file" ] || continue
+            node --check "$file"
+          done
+          echo "all modules parse"
+
+      - name: Unit tests
+        run: npm test
+
+  integration:
+    name: integration against a real DSH checkout
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Check out the DSH harness
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ env.DSH_REF }}
+          path: dsh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.19'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Install the harness
+        working-directory: dsh
+        run: pnpm install --frozen-lockfile
+
+      - name: The settings service accepts our section and serializes it
+        working-directory: dsh
+        run: node --import tsx/esm "$GITHUB_WORKSPACE/plugin/scripts/verify-settings-section.mjs"
+
+      - name: A path-level write leaves sibling routes untouched
+        working-directory: dsh
+        run: node --import tsx/esm "$GITHUB_WORKSPACE/plugin/scripts/verify-provider-route.mjs"

@@ -1,0 +1,24 @@
+# Python bytecode the vendored gateway produces when it runs.
+__pycache__/
+*.pyc
+
+# Node and package-manager state, for anyone who installs this as a dependency.
+node_modules/
+
+# Local probe artifacts and scratch output.
+tmp-probe/
+*.local.json
+
+# Editor and OS noise.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Anything holding a real credential must never be committed. The plugin keeps
+# its state under $DSH_HOME precisely so that no account material lives here.
+*.info
+.credentials.yaml
+settings.yaml
+accounts/
+usage/
