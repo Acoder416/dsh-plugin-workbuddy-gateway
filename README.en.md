@@ -21,7 +21,33 @@ Tencent in any way.
 | **Node** ≥ 20.19 | The host half imports Node builtins only |
 | **Python** ≥ 3.9 | The gateway is Python; standard library only (verified on 3.13) |
 | **A WorkBuddy account** | Global or China subscription; sign in through the browser, or import the credential the desktop app already stored |
-| Platform | Verified on Windows. The code is portable, but macOS and Linux are untested |
+
+### Platform support
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Gateway boot and proxying | ✅ Verified | ✅ Adapted, **not tested on hardware** | ✅ Adapted, **not tested on hardware** |
+| **Import the desktop credential** | ✅ | ❌ **Unavailable** | ❌ **Unavailable** |
+| Browser OAuth sign-in | ✅ | ✅ Should work | ✅ Should work |
+| Process supervision (start/stop/readiness/log) | ✅ | ✅ Adapted | ✅ Adapted |
+
+**"Import the desktop credential" does not work on macOS or Linux**, because the
+gateway looks for the official desktop app's stored credential at a Windows path
+(`%LOCALAPPDATA%\CodeBuddyExtension\Data\Public\auth\*.info`). That is the bundled
+upstream code's behaviour, not this plugin's. On those platforms use **"Sign in via
+browser"** in the settings page instead — that path does not involve the desktop app.
+
+**Interpreter naming.** The plugin does not hardcode `python`; it probes by
+platform and takes the first one that runs:
+
+| Platform | Tried in order |
+|---|---|
+| Windows | `python` → `python3` |
+| macOS / Linux | `python3` → `python` |
+
+So macOS needs no manual `python3` configuration (Apple has shipped no `python`
+name since macOS 12.3). The resolved interpreter appears in the settings page's
+gateway card, and can be pinned through its `pythonPath` field.
 
 **It depends on DSH internals that are not a stable public API** —
 `settings.installSection`, `settings.mutate`, `webServer.register`, `credentials.*`,

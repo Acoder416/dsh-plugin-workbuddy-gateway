@@ -18,7 +18,29 @@
 | **Node** ≥ 20.19 | 宿主半只用 Node 内置模块 |
 | **Python** ≥ 3.9 | 网关是 Python，仅用标准库（本机在 3.13 上实测） |
 | **WorkBuddy 账号** | 国际版或国内版订阅；浏览器 OAuth 授权，或从桌面端已存的凭证导入 |
-| 平台 | 主要在 Windows 上验证。路径与进程管理是跨平台的，但未在 macOS / Linux 上实测 |
+
+### 平台支持
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| 网关启动与代理 | ✅ 已实测 | ✅ 代码已适配，**未经实机验证** | ✅ 代码已适配，**未经实机验证** |
+| **导入桌面端凭证** | ✅ | ❌ **不可用** | ❌ **不可用** |
+| 浏览器 OAuth 授权登录 | ✅ | ✅ 应该可用 | ✅ 应该可用 |
+| 进程托管（启停 / 就绪 / 日志） | ✅ | ✅ 代码已适配 | ✅ 代码已适配 |
+
+**macOS / Linux 上「导入桌面端凭证」用不了**，因为网关只在 Windows 路径下找官方桌面端存的凭证
+（`%LOCALAPPDATA%\CodeBuddyExtension\Data\Public\auth\*.info`）。这是内置上游代码的行为，不是本插件的。
+在这些平台上改用**设置页里的「浏览器授权登录」** —— 那条路不依赖桌面端。
+
+**解释器的名字**：插件不硬编码 `python`。它按平台探测，第一个能跑起来的胜出：
+
+| 平台 | 依次尝试 |
+|---|---|
+| Windows | `python` → `python3` |
+| macOS / Linux | `python3` → `python` |
+
+所以 macOS 上不需要手动配 `python3`（Apple 从 macOS 12.3 起就不再提供 `python` 这个名字了）。
+探测结果会显示在设置页的网关卡片里；也可以在该页的 `pythonPath` 字段里写死。
 
 **它依赖 DSH 的非公开内部接口**：`settings.installSection`、`settings.mutate`、
 `webServer.register`、`credentials.*`、客户端 `settings.section` 槽位。

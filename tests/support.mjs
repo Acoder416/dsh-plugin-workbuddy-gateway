@@ -59,18 +59,40 @@ export function fakeChild({ pid = 4242 } = {}) {
 /**
  * A `spawn` stand-in that records every call and hands back one fake child.
  *
- * @returns {{spawn: Function, calls: object[], children: object[], last: () => object}}
+ * The supervisor probes for a working interpreter before starting the real one
+ * (`python3` rather than `python` on macOS), and that probe spawns a command with
+ * `-c pass`. Those probes are answered here by default and kept out of `children`,
+ * so `last()`/`calls[0]` still mean "the gateway process" for every caller and no
+ * test has to know the probe exists.
+ *
+ * @param {object} [options] - behaviour switches.
+ * @param {string[]} [options.runnable] - commands the probe should accept.
+ *   Defaults to every candidate, which keeps the probe invisible; pass an empty
+ *   array to simulate a machine with no usable interpreter.
+ * @returns {{spawn: Function, calls: object[], children: object[], probes: object[], last: () => object}}
  */
-export function fakeSpawn() {
+export function fakeSpawn({ runnable } = {}) {
   const calls = []
   const children = []
+  const probes = []
+  const usable = runnable ?? null
+
   const spawn = (command, args, options) => {
+    const isProbe = Array.isArray(args) && args[0] === '-c' && args[1] === 'pass'
+    if (isProbe) {
+      probes.push({ command, args, options })
+      const child = fakeChild({ pid: 3000 + probes.length })
+      // Answer the probe on the next tick, the way a real process would.
+      const resolves = usable === null || usable.includes(command)
+      setImmediate(() => child.finish(resolves ? 0 : 1, null))
+      return child
+    }
     const child = fakeChild({ pid: 4000 + children.length })
     calls.push({ command, args, options })
     children.push(child)
     return child
   }
-  return { spawn, calls, children, last: () => children[children.length - 1] }
+  return { spawn, calls, children, probes, last: () => children[children.length - 1] }
 }
 
 /**

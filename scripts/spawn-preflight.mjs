@@ -17,6 +17,8 @@ import { dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 
+import { pythonCandidates } from '../src/gateway.js'
+
 /**
  * Find the plugin root by walking up for the vendored gateway.
  *
@@ -39,9 +41,27 @@ export function pluginRootFrom(start) {
   return null
 }
 
-/** The Python the plugin would use; `spawn` resolves a bare name through PATH. */
-function pythonCommand() {
-  return process.env.WORKBUDDY_PYTHON ?? 'python'
+/**
+ * The Python this machine would actually run.
+ *
+ * Mirrors the supervisor's own resolution rather than hardcoding `python`: on
+ * macOS that name does not exist, so a pre-flight that assumed it would fail on a
+ * machine where the plugin works fine — or, worse, pass on one where the plugin
+ * would fail.
+ *
+ * @returns {Promise<string>} the first candidate that answers `--version`.
+ */
+async function pythonCommand() {
+  if (process.env.WORKBUDDY_PYTHON) return process.env.WORKBUDDY_PYTHON
+  for (const candidate of pythonCandidates(process.platform)) {
+    const works = await new Promise((resolve) => {
+      const child = spawn(candidate, ['--version'], { stdio: 'ignore' })
+      child.on('error', () => resolve(false))
+      child.on('exit', (code) => resolve(code === 0))
+    })
+    if (works) return candidate
+  }
+  return pythonCandidates(process.platform)[0]
 }
 
 const script = `
@@ -77,7 +97,9 @@ async function preflight() {
   )
 
   // 1. The interpreter the plugin will spawn must exist and run.
-  const probe = spawn(pythonCommand(), ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const python = await pythonCommand()
+  check('an interpreter was found on PATH', python !== undefined, python)
+  const probe = spawn(python, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] })
   const version = await new Promise((resolveVersion) => {
     let text = ''
     probe.stdout.on('data', (chunk) => { text += String(chunk) })
@@ -85,10 +107,10 @@ async function preflight() {
     probe.on('error', (error) => resolveVersion(`error: ${error.message}`))
     probe.on('exit', (code) => resolveVersion(`${text.trim()} (exit ${String(code)})`))
   })
-  check(`the interpreter runs: ${pythonCommand()}`, !version.startsWith('error:'), version)
+  check(`the interpreter runs: ${python}`, !version.startsWith('error:'), version)
 
   // 2. Piped stdio, line streaming, readiness detection, and a clean kill.
-  const child = spawn(pythonCommand(), ['-u', '-c', script], {
+  const child = spawn(python, ['-u', '-c', script], {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
     env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },

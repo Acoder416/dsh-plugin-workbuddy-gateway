@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { GATEWAY_STATE, Gateway, baseUrlFor } from '../src/gateway.js'
+import { GATEWAY_STATE, Gateway, baseUrlFor, pythonCandidates } from '../src/gateway.js'
 import { fakeSpawn } from './support.mjs'
 
 const SETTINGS = {
@@ -16,7 +16,11 @@ const SETTINGS = {
   autoStart: true,
   providerSync: true,
   gatewayDir: 'C:/gw',
-  pythonPath: '',
+  // Pinned on purpose. These tests are about the process state machine, so they
+  // name the interpreter and skip the PATH probe entirely — leaving it unnamed
+  // would make every assertion depend on which python the host happens to have.
+  // The probe has its own tests below.
+  pythonPath: 'python',
   realm: null,
 }
 
@@ -311,4 +315,77 @@ test('running agrees with the snapshot field in every state', async () => {
 
   await gateway.stop()
   assert.equal(gateway.running, gateway.snapshot().running)
+})
+
+/**
+ * The interpreter is probed rather than assumed, because `python` does not exist
+ * on a stock macOS — only `python3`. Getting this wrong is the difference between
+ * a plugin that works there and one that reports ENOENT for a machine that has
+ * Python installed.
+ */
+test('an unnamed interpreter prefers python3 off Windows and python on it', () => {
+  assert.deepEqual(pythonCandidates('darwin'), ['python3', 'python'])
+  assert.deepEqual(pythonCandidates('linux'), ['python3', 'python'])
+  assert.deepEqual(pythonCandidates('win32'), ['python', 'python3'])
+})
+
+test('an unnamed interpreter falls back to the one that actually runs', async () => {
+  // Only `python3` is runnable, which is the macOS case.
+  const spawner = fakeSpawn({ runnable: ['python3'] })
+  const gateway = new Gateway({
+    spawn: spawner.spawn,
+    settings: () => ({ ...SETTINGS, pythonPath: '' }),
+    paths: () => PATHS,
+  })
+  const started = gateway.start()
+  await waitFor(() => spawner.children.length === 1)
+  spawner.last().announceReady(18088)
+  await started
+
+  const [call] = spawner.calls
+  assert.equal(call.command, 'python3', 'spawned the interpreter that works')
+  assert.ok(gateway.snapshot().log.some((entry) => entry.text.includes('python3')), 'the log names it')
+})
+
+test('the probe is skipped entirely when the interpreter is named', async () => {
+  const { gateway, spawner } = harness()
+  const started = gateway.start()
+  spawner.last().announceReady(18088)
+  await started
+
+  assert.deepEqual(spawner.probes, [], 'no probe ran')
+  assert.equal(spawner.calls[0].command, 'python', 'spawned the named interpreter')
+})
+
+test('a machine with no runnable interpreter still reports a useful error', async () => {
+  const spawner = fakeSpawn({ runnable: [] })
+  const gateway = new Gateway({
+    spawn: spawner.spawn,
+    settings: () => ({ ...SETTINGS, pythonPath: '' }),
+    paths: () => PATHS,
+  })
+  const started = gateway.start()
+  await waitFor(() => spawner.children.length === 1)
+  spawner.last().finish(1, null)
+  const result = await started
+
+  assert.equal(result.ok, false)
+  // Falls back to the platform's first candidate so the operator sees its name.
+  assert.equal(spawner.calls[0].command, pythonCandidates(process.platform)[0])
+})
+
+test('the snapshot reports the interpreter that was selected', async () => {
+  const spawner = fakeSpawn({ runnable: ['python3'] })
+  const gateway = new Gateway({
+    spawn: spawner.spawn,
+    settings: () => ({ ...SETTINGS, pythonPath: '' }),
+    paths: () => PATHS,
+  })
+  const started = gateway.start()
+  await waitFor(() => spawner.children.length === 1)
+  spawner.last().announceReady(18088)
+  await started
+
+  assert.equal(gateway.snapshot().pythonPath, 'python3')
+  assert.equal(gateway.snapshot().platform, process.platform)
 })

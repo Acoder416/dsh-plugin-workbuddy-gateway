@@ -62,6 +62,7 @@ window.__ModuleLoader__.load({
         port: '端口',
         gatewayDir: '网关目录',
         pythonPath: 'Python 解释器',
+        platform: '平台',
         script: '启动脚本',
         accountStore: '账号目录',
         usageStore: '用量目录',
@@ -155,6 +156,7 @@ window.__ModuleLoader__.load({
         port: 'Port',
         gatewayDir: 'Gateway directory',
         pythonPath: 'Python interpreter',
+        platform: 'Platform',
         script: 'Launch script',
         accountStore: 'Account store',
         usageStore: 'Usage store',
@@ -586,6 +588,11 @@ window.__ModuleLoader__.load({
             h(Field, { key: 'endpoint', label: t.endpoint, value: gateway.baseUrl ?? '—' }),
             h(Field, { key: 'pid', label: t.pid, value: gateway.pid ?? '—' }),
             h(Field, { key: 'uptime', label: t.uptime, value: gateway.uptimeMs === null ? '—' : humanDuration(gateway.uptimeMs) }),
+            // The interpreter is shown because it is resolved, not configured: on
+            // a platform whose Python is named differently the probe picks one,
+            // and this reading is how an operator learns which.
+            h(Field, { key: 'python', label: t.pythonPath, value: gateway.pythonPath }),
+            h(Field, { key: 'platform', label: t.platform, value: gateway.platform }),
             h(Field, { key: 'script', label: t.script, value: gateway.script }),
             h(Field, { key: 'accountsStore', label: t.accountStore, value: gateway.accountStore }),
             h(Field, { key: 'usageStore', label: t.usageStore, value: gateway.usageStore })),

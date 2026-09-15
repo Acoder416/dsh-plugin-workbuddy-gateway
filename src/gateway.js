@@ -45,6 +45,79 @@ const READY_PATTERN = /listening\s*:\s*(http:\/\/\S+)/
 const PORT_PATTERN = /:(\d+)\/v1/
 
 /**
+ * Python commands to try, in order, when the operator has not named one.
+ *
+ * `python` alone is not a portable default. macOS has shipped no `python` shim
+ * since 12.3 (only `python3`), and several Linux distributions do the same, so a
+ * Windows-only assumption here turns into "the gateway will not start" on a
+ * machine where Python is installed and working.
+ *
+ * Windows is listed first because that is the platform this was verified on, and
+ * `python` is the conventional name there.
+ *
+ * @param {string} platform - `process.platform`.
+ * @returns {string[]} interpreter candidates, most likely first.
+ */
+export function pythonCandidates(platform) {
+  return platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']
+}
+
+/** How long one interpreter probe may take before that candidate is skipped. */
+const PROBE_TIMEOUT_MS = 5000
+
+/**
+ * Find the first candidate interpreter that actually runs.
+ *
+ * A wrong guess costs one failed spawn and an ENOENT line on the settings page,
+ * so probing is worth a few milliseconds once per start. Every probe is bounded:
+ * a command that exists but never exits must not wedge `start()`, which is why
+ * the timer races the child rather than trusting it to settle.
+ *
+ * When nothing answers, null is returned and the caller falls back to the first
+ * candidate so its spawn error is what the operator sees — that message is what
+ * they need in order to set `pythonPath` by hand.
+ *
+ * @param {object} options - probe inputs.
+ * @param {Function} options.spawn - the same injected spawn the class uses.
+ * @param {string[]} options.candidates - commands to try, in order.
+ * @returns {Promise<string|null>} the first working command, or null if none.
+ */
+async function firstWorkingPython({ spawn, candidates }) {
+  for (const candidate of candidates) {
+    const works = await new Promise((resolve) => {
+      let settled = false
+      const settle = (value) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(value)
+      }
+      const timer = setTimeout(() => {
+        // A probe that outlives its budget is killed so it cannot linger.
+        try {
+          child?.kill()
+        } catch {
+          /* a child that never started has nothing to kill */
+        }
+        settle(false)
+      }, PROBE_TIMEOUT_MS)
+
+      let child
+      try {
+        child = spawn(candidate, ['-c', 'pass'], { stdio: 'ignore', windowsHide: true })
+      } catch {
+        settle(false)
+        return
+      }
+      child.on('error', () => settle(false))
+      child.on('exit', (code) => settle(code === 0))
+    })
+    if (works) return candidate
+  }
+  return null
+}
+
+/**
  * Own the gateway's lifecycle.
  *
  * @example
@@ -73,6 +146,8 @@ export class Gateway {
   #starting = null
   /** Set while `stop()` is waiting for the child, so its exit is not read as a crash. */
   #stopping = false
+  /** The interpreter the last start actually spawned, which the probe may have chosen. */
+  #interpreter = null
 
   /**
    * @param {object} options - construction options.
@@ -157,7 +232,20 @@ export class Gateway {
     this.#lastError = null
     this.#lastExit = null
     this.#baseUrl = null
-    this.#append('log', `starting gateway: python ${paths.script} --port ${settings.port}`)
+
+    // An unnamed interpreter is probed rather than assumed: `python` does not
+    // exist on a stock macOS, and the failure that produces is an ENOENT that
+    // looks like a broken plugin rather than a naming difference.
+    let interpreter = settings.pythonPath
+    if (interpreter === '') {
+      const candidates = pythonCandidates(process.platform)
+      interpreter = await firstWorkingPython({ spawn: this.#spawn, candidates }) ?? candidates[0]
+      if (interpreter !== candidates[0]) {
+        this.#append('log', `using ${interpreter} (${candidates[0]} was not runnable)`)
+      }
+    }
+    this.#append('log', `starting gateway: ${interpreter} ${paths.script} --port ${settings.port}`)
+    this.#interpreter = interpreter
 
     // The gateway has no `--realm` flag: the active realm is chosen at runtime
     // through its own `POST /realm` endpoint, which persists to the account
@@ -167,7 +255,7 @@ export class Gateway {
 
     let child
     try {
-      child = this.#spawn(settings.pythonPath === '' ? 'python' : settings.pythonPath, args, {
+      child = this.#spawn(interpreter, args, {
         cwd: paths.cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -329,7 +417,11 @@ export class Gateway {
       lastExit: this.#lastExit,
       port: settings.port,
       gatewayDir: settings.gatewayDir,
-      pythonPath: settings.pythonPath === '' ? 'python (from PATH)' : settings.pythonPath,
+      // Report the interpreter actually spawned, not the configured default:
+      // those differ whenever the probe had to fall back, and the reading is
+      // how an operator discovers what the plugin chose.
+      pythonPath: this.#interpreter ?? (settings.pythonPath === '' ? `${pythonCandidates(process.platform)[0]} (resolved from PATH)` : settings.pythonPath),
+      platform: process.platform,
       script: paths.script,
       accountStore: paths.accountsDir,
       usageStore: paths.usageDir,
