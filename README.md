@@ -67,10 +67,20 @@ WorkBuddy 不提供官方 OpenAI 兼容 API：额度绑在订阅账号上，只�
 ```jsonc
 // $DSH_HOME/profiles/web/package.json
 "dependencies": {
-  "dsh-plugin-workbuddy-gateway": "link:C:/Users/lz/OneDrive/Desktop/dsh-test/dsh-plugin-workbuddy-gateway"
+  "dsh-plugin-workbuddy-gateway": "link:/absolute/path/to/dsh-plugin-workbuddy-gateway"
 },
 "dsh": { "profile": { "bundles": [ /* … */ "dsh-plugin-workbuddy-gateway" ] } }
 ```
+
+也可以直接从 git 装：
+
+```powershell
+cd $env:USERPROFILE\.dsh\profiles\web
+pnpm add github:Acoder416/dsh-plugin-workbuddy-gateway
+# 再把包名加进 package.json 的 dsh.profile.bundles，然后重启 dsh
+```
+
+装了 link 之后让 profile 解析依赖：
 
 ```powershell
 pnpm --dir $env:USERPROFILE\.dsh\profiles\web install
@@ -156,16 +166,17 @@ pnpm --dir $env:USERPROFILE\.dsh\profiles\web install
 ## 测试
 
 ```powershell
-cd C:\Users\lz\OneDrive\Desktop\dsh-test\dsh-plugin-workbuddy-gateway
-npm test          # 46 个离线测试：状态机、设置规范化、路由、提供方路由
-npm run preflight # 验证 Node 能 spawn Python 并流式读输出
+cd <本插件目录>
+npm test          # 67 个离线测试：不需要 DSH、Python、网络
+npm run preflight # 验证本机能 spawn Python 并流式读输出
+node scripts/check-package.mjs   # 发布前自检
 ```
 
 对**真实 settings 服务**的集成验证（需要 DSH 仓库；在临时文件上跑，不碰你的配置）：
 
 ```powershell
-cd D:\developer\deepseek-harness
-node --import tsx/esm C:\Users\lz\OneDrive\Desktop\dsh-test\dsh-plugin-workbuddy-gateway\scripts\verify-provider-route.mjs
+cd <你的 DSH 仓库>
+node --import tsx/esm <本插件目录>/scripts/verify-provider-route.mjs
 ```
 
 它验证单元测试验不到的那件事：DSH 自己的写入器接受对 `llm-pi-ai` 的路径级 `mutate`，
@@ -234,7 +245,3 @@ npm run report:reasoning          # 对着运行中的网关打印每个模型�
 node --import tsx/esm <本插件>\scripts\verify-settings-section.mjs
 node --import tsx/esm <本插件>\scripts\verify-provider-route.mjs
 ```
-
-
-插件机制参考了本机另外两个插件：`dsh-plugin-archived-sessions`（设置页 `settings.section` 挂载）
-与 `dsh-plugin-codex-monitor`（host 路由 + client 页面 + 同源守卫）。
