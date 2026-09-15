@@ -55,6 +55,13 @@ jobs:
   integration:
     name: integration against a real DSH checkout
     runs-on: ubuntu-latest
+    # Non-blocking on purpose. This job needs the harness repository to be
+    # readable from a GitHub runner: if `deepseek-ai/deepseek-harness` is private,
+    # the checkout fails and a red X would say nothing about this plugin. The
+    # unit job is the signal that must stay green.
+    #
+    # Point DSH_REPOSITORY at a fork or a mirror to make this job meaningful.
+    continue-on-error: true
     steps:
       - name: Check out this plugin
         uses: actions/checkout@v4
@@ -64,7 +71,7 @@ jobs:
       - name: Check out the DSH harness
         uses: actions/checkout@v4
         with:
-          repository: deepseek-ai/deepseek-harness
+          repository: ${{ vars.DSH_REPOSITORY || 'deepseek-ai/deepseek-harness' }}
           ref: ${{ env.DSH_REF }}
           path: dsh
 
