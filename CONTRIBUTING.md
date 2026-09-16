@@ -15,7 +15,8 @@ You need:
   without one.
 
 ```bash
-npm test                 # 67 offline tests, no DSH, no Python, no network
+npm test                 # offline JavaScript tests
+npm run test:python      # offline bundled-account tests (Python 3.9+)
 npm run preflight        # proves spawn + piped stdio work on your machine
 node scripts/check-package.mjs   # pre-publish check
 ```
@@ -61,12 +62,11 @@ also have is a resolution failure waiting to happen.
 
 ## Boundaries
 
-**Do not edit `vendor/`.** It is a verbatim copy of upstream
-([`ardeyouxipianyi/workbuddy2api-intl`](https://github.com/ardeyouxipianyi/workbuddy2api-intl),
-MIT). Local edits make the next upstream sync a manual merge and hide the fact
-that you are running something other than upstream. If upstream needs a change,
-send it there; if this plugin needs different behavior, put it at the plugin
-root and reach it through configuration or environment.
+**Track changes to `vendor/`.** The bundled gateway comes from
+[`ardeyouxipianyi/workbuddy2api-intl`](https://github.com/ardeyouxipianyi/workbuddy2api-intl)
+(MIT). Local account-adapter fixes are listed in `THIRD_PARTY_NOTICES.md` and
+covered by `npm run test:python`. Record every local modification there, retain
+the license, and reconcile these patches on upstream updates.
 
 **Do not weaken the account guards.** Every mutating HTTP route is behind a
 same-origin check, and the plugin refuses to autostart the gateway when it cannot

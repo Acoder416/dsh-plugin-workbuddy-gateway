@@ -80,6 +80,9 @@ check('the source declares a plugin version', marker !== null)
 if (marker !== null) {
   check('package.json and the source agree on the version', marker[1] === pkg.version, `source ${marker[1]} vs package ${pkg.version}`)
 }
+const routesSource = readFileSync(join(root, 'src/routes.js'), 'utf8')
+const healthVersion = /plugin: \{ version: '([^']+)'/.exec(routesSource)
+check('health endpoint reports the package version', healthVersion?.[1] === pkg.version)
 
 // A machine-specific absolute path in shipped code is a fresh-install failure.
 const suspect = /['"`]([A-Za-z]:[\\/]|\/Users\/|\/home\/)[^'"`]*['"`]/g

@@ -12,15 +12,24 @@ proxy. Python standard library only; no build step and no dependencies.
 
 **Upstream.** [`ardeyouxipianyi/workbuddy2api-intl`](https://github.com/ardeyouxipianyi/workbuddy2api-intl)
 (also published there as `ardeyouxipianyi/workbuddy2api`), version 1.1.2 as
-vendored. The Python sources and `dashboard.html` are copied verbatim; the only
-additions in this package are at the repository root, outside this directory.
+vendored. Local modifications to the account adapter are listed below; the
+upstream license is retained.
 
 **License.** MIT. The upstream `LICENSE` file is preserved unmodified at
 `vendor/workbuddy-gateway/LICENSE`. Its copyright line reads
 `Copyright (c) 2026` with no name attached, and it is reproduced here exactly as
 received rather than attributed to a name its own text does not state.
 
-**Modifications.** None. The plugin runs this copy from its own directory and
+**Modifications in 0.1.2.** `wb_accounts.py` contains local changes for:
+
+- Platform-specific desktop credential directories and `WORKBUDDY_DESKTOP_AUTH_DIR`.
+- Reading credits after desktop import and CN check-in.
+- Persisting confirmed reward-claim status, including HTTP error code `10001`.
+
+A local `.npmignore` excludes Python bytecode and account state from npm packages.
+
+`tests/test_accounts.py` covers these changes with offline fixtures. Preserve or
+reconcile these changes when updating upstream. The plugin runs this copy from its own directory and
 redirects the mutable state it produces — account credentials and usage records —
 out of the checkout and into `$DSH_HOME/workbuddy/`, by environment variable. That
 keeps a `link:`-installed plugin from writing into its own source tree.

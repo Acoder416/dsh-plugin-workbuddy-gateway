@@ -1,12 +1,14 @@
 # Normalise line endings so a Windows checkout and a Linux one produce the same
 # bytes. Without this, Git's autocrlf rewrites text files on checkout and the
-# vendored Python (a verbatim copy of upstream) stops being verbatim — which
-# matters, because THIRD_PARTY_NOTICES claims it is unmodified.
+# vendored Python (a verbatim copy of upstream) stops being verbatim — whose
+# local modifications are recorded in THIRD_PARTY_NOTICES.md.
 
 * text=auto eol=lf
 
-# The vendored gateway is upstream's code. Keep it byte-identical.
+# Preserve upstream line endings in vendored files.
 vendor/** -text
+# The locally patched account adapter retains upstream CRLF endings.
+vendor/workbuddy-gateway/wb_accounts.py whitespace=trailing-space,space-before-tab,cr-at-eol
 
 # Binary assets.
 *.png binary

@@ -85,11 +85,22 @@ window.__ModuleLoader__.load({
         realmIntl: '国际版 (workbuddy.ai)',
         realmCn: '国内版 (codebuddy.cn)',
         realmDefault: '跟随网关当前设置',
-        realmNote: '区域决定网关用哪个区的账号和模型清单；切换后需要重启网关。',
-        realmSwitched: '已切换区域，重启网关后生效。',
+        realmNote: '网关运行时切换区域立即生效；停止时在下次启动应用。',
+        realmSwitched: '已保存区域设置。',
         expires: (text) => `${text} 后过期`,
         disabled: '已停用',
         scan: '扫描桌面端账号',
+        refreshCredits: '刷新积分',
+        claimCredits: '领取积分',
+        checkin: '签到',
+        checkedIn: (time) => `已签到${time ? ` · ${time}` : ''}`,
+        notCheckedIn: '未签到',
+        enableAll: '全部启用',
+        disableAll: '全部停用',
+        enable: '启用',
+        disable: '停用',
+        creditBalance: (value) => `${value} 积分`,
+        taskClaimed: '积分任务已执行，请刷新积分查看结果。',
         scanNote: '只读取本机 WorkBuddy 桌面端已有的凭证，不会修改它。',
         import: '导入',
         imported: (name) => `已导入 ${name}`,
@@ -179,11 +190,22 @@ window.__ModuleLoader__.load({
         realmIntl: 'Global (workbuddy.ai)',
         realmCn: 'China (codebuddy.cn)',
         realmDefault: 'Follow the gateway\'s current setting',
-        realmNote: 'The realm selects which region\'s accounts and model list the gateway uses; a change needs a gateway restart.',
-        realmSwitched: 'Realm switched; restart the gateway for it to take effect.',
+        realmNote: 'Realm changes apply immediately while the gateway is running, or on its next start.',
+        realmSwitched: 'Realm setting saved.',
         expires: (text) => `expires in ${text}`,
         disabled: 'disabled',
         scan: 'Scan desktop accounts',
+        refreshCredits: 'Refresh credits',
+        claimCredits: 'Claim credits',
+        checkin: 'Check in',
+        checkedIn: (time) => `Checked in${time ? ` · ${time}` : ''}`,
+        notCheckedIn: 'Not checked in',
+        enableAll: 'Enable all',
+        disableAll: 'Disable all',
+        enable: 'Enable',
+        disable: 'Disable',
+        creditBalance: (value) => `${value} credits`,
+        taskClaimed: 'Credit tasks ran; refresh credits to see the result.',
         scanNote: 'Reads credentials the local WorkBuddy desktop app already has, and does not modify them.',
         import: 'Import',
         imported: (name) => `Imported ${name}`,
@@ -393,6 +415,12 @@ window.__ModuleLoader__.load({
       const payload = await response.json().catch(() => null)
       if (payload === null || payload.ok !== true) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`)
+      }
+      const result = payload.data?.result
+      if (result?.ok === false) throw new Error(result.error ?? result.msg ?? 'Gateway operation failed')
+      const failures = result?.results?.filter((entry) => entry.ok === false) ?? []
+      if (failures.length > 0) {
+        throw new Error(failures.map((entry) => `${entry.uid}: ${entry.error ?? entry.msg ?? 'Failed'}`).join('; '))
       }
       return payload.data
     }
@@ -655,6 +683,16 @@ window.__ModuleLoader__.load({
               if (typeof started.authUrl === 'string') window.open(started.authUrl, '_blank', 'noopener')
               setMessage({ kind: 'ok', text: t.loginStarted })
             }), undefined)),
+          h('div', { style: style.rowTop },
+            action(t.refreshCredits, () => void run('credits', () => postJson('/accounts/credits'), undefined), undefined),
+            settings.realm === 'cn'
+              ? action(t.claimCredits, () => void run('tasks', () => postJson('/tasks/run'), t.taskClaimed), undefined)
+              : null,
+            settings.realm === 'cn'
+              ? action(t.checkin, () => void run('checkin', () => postJson('/accounts/checkin'), t.saved), undefined)
+              : null,
+            action(t.enableAll, () => void run('enable-all', () => postJson('/accounts/set-all', { enabled: true }), t.saved), undefined),
+            action(t.disableAll, () => void run('disable-all', () => postJson('/accounts/set-all', { enabled: false }), t.saved), undefined)),
 
           // The realm selector lives here, not in the gateway card, because this
           // is the list it filters: a second account in the other realm is
@@ -688,8 +726,18 @@ window.__ModuleLoader__.load({
                 h('div', { style: style.accountMain },
                   h('span', { style: style.accountName }, entry.nickname ?? entry.uid),
                   h('span', { style: style.note },
-                    [entry.realmName ?? entry.realm, entry.expiresIn === undefined ? null : t.expires(entry.expiresIn), entry.enabled === false ? t.disabled : null]
+                    [entry.realmName ?? entry.realm, entry.expiresIn === undefined ? null : t.expires(entry.expiresIn), entry.enabled === false ? t.disabled : null,
+                      entry.credits?.remain === undefined ? null : t.creditBalance(entry.credits.remain),
+                      entry.realm === 'cn' ? (entry.checkinClaimed === true || (entry.checkinClaimed === undefined && entry.lastCheckin)
+                        ? t.checkedIn(entry.lastCheckin) : t.notCheckedIn) : null]
                       .filter(Boolean).join(' · '))),
+                h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+                  action(t.refreshCredits, () => void run(`credits-${entry.uid}`, () => postJson('/accounts/credits', { uid: entry.uid }), undefined), undefined),
+                  entry.realm === 'cn'
+                    ? action(t.checkin, () => void run(`checkin-${entry.uid}`, () => postJson('/accounts/checkin', { uid: entry.uid }), t.saved), undefined)
+                    : null,
+                  action(entry.enabled === false ? t.enable : t.disable,
+                    () => void run(`set-${entry.uid}`, () => postJson('/accounts/set', { uid: entry.uid, enabled: entry.enabled === false }), t.saved), undefined)),
                 confirmUid === entry.uid
                   ? h('div', { style: { display: 'flex', gap: '6px' } },
                       h('button', {
