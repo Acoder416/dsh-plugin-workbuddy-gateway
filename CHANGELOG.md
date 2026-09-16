@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 — 2026-09-16
+
+- Treat upstream HTTP 502/503/504 during model connection setup as account-failover candidates, alongside 401/403/429 and network errors. Previously these gateway errors immediately failed the request without trying another available account.
+- With only one account, return the upstream 502/503/504 without cooling down that account, so a caller retry is not blocked.
+- Preserve bounded attempts, same-realm selection, and session rebinding. Errors after streaming begins are not replayed; an upstream-wide outage may still fail every account.
+- Add offline regression tests for APISIX 502 → 504 → success, exhausted accounts, non-retryable HTTP 400, existing auth/rate-limit failover, and bounded single-account attempts.
+- Keep `v0.1.2` and `v0.1.1` available for rollback.
+
 ## 0.1.2 — 2026-09-16
 
 - Add credit refresh, CN check-in, growth-task requests, and account enable/disable controls to the settings integration.

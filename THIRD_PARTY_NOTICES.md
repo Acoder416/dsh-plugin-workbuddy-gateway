@@ -26,6 +26,10 @@ received rather than attributed to a name its own text does not state.
 - Reading credits after desktop import and CN check-in.
 - Persisting confirmed reward-claim status, including HTTP error code `10001`.
 
+**Modifications in 0.1.3.** `wb_proxy.py` includes HTTP 502/503/504 in
+connection-stage account failover. `tests/test_upstream.py` exercises the real
+account pool with simulated upstream responses and no live credentials.
+
 A local `.npmignore` excludes Python bytecode and account state from npm packages.
 
 `tests/test_accounts.py` covers these changes with offline fixtures. Preserve or

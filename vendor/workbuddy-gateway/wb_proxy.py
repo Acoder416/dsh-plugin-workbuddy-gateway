@@ -1447,7 +1447,11 @@ def open_upstream(payload, session_key=None, target_realm=None):
             account.clear_error()
             return resp, account
         except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403, 429):
+            # Without an alternative, let the caller retry the upstream failure
+            # without putting the only account into cooldown.
+            if exc.code in (502, 503, 504) and total <= 1:
+                raise
+            if exc.code in (401, 403, 429, 502, 503, 504):
                 log("account %s rejected (HTTP %s), rotating" % (account.uid[:8], exc.code))
                 if session_key and POOL:
                     POOL.affinity.unbind(session_key)

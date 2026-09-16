@@ -7,8 +7,9 @@
 
 # Preserve upstream line endings in vendored files.
 vendor/** -text
-# The locally patched account adapter retains upstream CRLF endings.
+# Locally patched gateway modules retain upstream CRLF endings.
 vendor/workbuddy-gateway/wb_accounts.py whitespace=trailing-space,space-before-tab,cr-at-eol
+vendor/workbuddy-gateway/wb_proxy.py whitespace=trailing-space,space-before-tab,cr-at-eol
 
 # Binary assets.
 *.png binary
