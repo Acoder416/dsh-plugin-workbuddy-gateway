@@ -438,7 +438,11 @@ export class Gateway {
     if (stream === null || stream === undefined) return
     const reader = createInterface({ input: stream })
     reader.on('line', (line) => {
-      const level = streamName === 'stderr' ? 'error' : 'log'
+      // The bundled Python gateway writes its access log to stderr. A
+      // successful HTTP status is routine traffic and must not be rendered as
+      // an error just because of the stream it uses.
+      const accessSuccess = /"[A-Z]+ \S+ HTTP\/\d(?:\.\d)?" [23]\d\d(?:\s|$)/.test(line)
+      const level = streamName === 'stderr' && !accessSuccess ? 'error' : 'log'
       this.#append(level, line)
       this.#observe(line)
     })

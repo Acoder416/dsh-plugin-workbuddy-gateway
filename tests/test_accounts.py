@@ -1,0 +1,92 @@
+"""Offline checks for local changes to the bundled account adapter."""
+
+import io
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'vendor' / 'workbuddy-gateway'))
+import wb_accounts as accounts
+
+
+class AccountTests(unittest.TestCase):
+    def test_http_already_claimed_is_persisted_and_reported_as_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            account = accounts.Account({'uid': 'test', 'realm': 'cn', 'accessToken': 'fake'})
+            account.save(directory)
+            error = HTTPError('https://example.invalid', 400, 'Bad Request', {},
+                              io.BytesIO(json.dumps({'code': 10001, 'msg': 'already claimed'}).encode()))
+            with patch.object(accounts, 'http_json', side_effect=error):
+                result = account.checkin()
+            self.assertTrue(result['ok'])
+            self.assertTrue(result['claimed'])
+            restored = accounts.Account(json.loads(Path(account.path).read_text(encoding='utf-8')))
+            self.assertTrue(restored.public()['checkinClaimed'])
+            self.assertIsNotNone(restored.public()['lastCheckin'])
+
+    def test_unrelated_http_error_does_not_mark_claimed(self):
+        account = accounts.Account({'realm': 'cn', 'accessToken': 'fake'})
+        error = HTTPError('https://example.invalid', 401, 'Unauthorized', {},
+                          io.BytesIO(b'{"code":401,"msg":"token already expired"}'))
+        with patch.object(accounts, 'http_json', side_effect=error):
+            result = account.checkin()
+        self.assertFalse(result['ok'])
+        self.assertIsNone(account.checkin_claimed)
+        self.assertIsNone(account.last_checkin)
+
+    def test_success_and_rejected_checkins_have_distinct_state(self):
+        for code, expected in [(0, True), (10001, True), (12345, False)]:
+            with self.subTest(code=code):
+                account = accounts.Account({'realm': 'cn', 'accessToken': 'fake'})
+                with patch.object(accounts, 'http_json', return_value={'code': code}):
+                    result = account.checkin()
+                self.assertEqual(result['ok'], expected)
+                self.assertEqual(account.checkin_claimed is True, expected)
+
+    def test_import_reads_credits_after_cn_checkin(self):
+        for realm in ('cn', 'intl'):
+            with self.subTest(realm=realm), tempfile.TemporaryDirectory() as directory:
+                credential = Path(directory) / 'desktop.info'
+                credential.write_text(json.dumps({'auth': {'accessToken': 'fake'},
+                                                 'account': {'uid': 'test'}}), encoding='utf-8')
+                calls = []
+
+                def checkin(account):
+                    calls.append('checkin')
+                    account.checkin_claimed = True
+                    return {'ok': True}
+
+                def credits(account):
+                    calls.append('credits')
+                    account.credits = {'remain': 100}
+                    return {'ok': True}
+
+                pool = accounts.AccountPool(str(Path(directory) / 'pool'))
+                with patch.object(accounts.Account, 'checkin', checkin), patch.object(accounts.Account, 'fetch_credits', credits):
+                    imported = pool.import_desktop_credential(str(credential), realm=realm)
+                self.assertEqual(calls, ['checkin', 'credits'] if realm == 'cn' else ['credits'])
+                self.assertEqual(imported.public()['credits']['remain'], 100)
+                self.assertEqual(imported.public()['checkinClaimed'], True if realm == 'cn' else None)
+
+    def test_platform_directories(self):
+        for platform, os_name, expected in [
+            ('win32', 'nt', os.path.join('local-data', 'CodeBuddyExtension', 'Data', 'Public', 'auth')),
+            ('darwin', 'posix', os.path.join('test-home', 'Library', 'Application Support', 'CodeBuddyExtension', 'Data', 'Public', 'auth')),
+            ('linux', 'posix', os.path.join('xdg-config', 'CodeBuddyExtension', 'Data', 'Public', 'auth')),
+        ]:
+            with self.subTest(platform=platform), patch.dict(os.environ, {'LOCALAPPDATA': 'local-data', 'XDG_CONFIG_HOME': 'xdg-config'}, clear=True), patch.object(accounts.sys, 'platform', platform), patch.object(accounts.os, 'name', os_name), patch.object(accounts.os.path, 'expanduser', return_value='test-home'):
+                self.assertEqual(accounts.desktop_auth_dir(), expected)
+
+    def test_override_scans_only_recognized_credential_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ['workbuddy-desktop-ai.info', 'workbuddy-desktop.info', 'unrelated.info']:
+                (Path(directory) / name).write_text('{}', encoding='utf-8')
+            with patch.dict(os.environ, {'WORKBUDDY_DESKTOP_AUTH_DIR': directory}):
+                found = accounts.desktop_credential_candidates()
+            self.assertEqual(found, [(os.path.join(directory, 'workbuddy-desktop-ai.info'), 'intl'),
+                                     (os.path.join(directory, 'workbuddy-desktop.info'), 'cn')])

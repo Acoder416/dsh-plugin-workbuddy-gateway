@@ -282,6 +282,35 @@ test('a mutating route refuses a cross-origin request', async () => {
   assert.equal(response.payload.error.code, 'cross-origin')
 })
 
+test('account operations forward the selected uid and keep upstream results', async (t) => {
+  const { server } = harness()
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, method: options.method, body: JSON.parse(options.body) })
+    return { ok: true, status: 200, text: async () => JSON.stringify({
+      results: [{ uid: 'selected', ok: false, error: 'upstream unavailable' }],
+    }) }
+  })
+  for (const suffix of ['/accounts/credits', '/accounts/checkin']) {
+    const response = await server.call(`${ROUTE_BASE}${suffix}`, { method: 'POST', body: { uid: 'selected' } })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.payload.data.result.results[0].error, 'upstream unavailable')
+    assert.deepEqual(calls.at(-1), { url: `http://127.0.0.1:18088${suffix}`, method: 'POST', body: { uid: 'selected' } })
+  }
+})
+
+test('new account and task operations reject cross-origin requests and GET', async () => {
+  const { server } = harness()
+  for (const suffix of ['/accounts/credits', '/accounts/checkin', '/accounts/set', '/accounts/set-all', '/tasks/run']) {
+    const crossOrigin = await server.call(`${ROUTE_BASE}${suffix}`, {
+      method: 'POST', headers: { origin: 'http://evil.example' }, body: {},
+    })
+    assert.equal(crossOrigin.statusCode, 403)
+    const read = await server.call(`${ROUTE_BASE}${suffix}`)
+    assert.equal(read.statusCode, 405)
+  }
+})
+
 test('a read route rejects the wrong verb', async () => {
   const { server } = harness()
   const response = await server.call(`${ROUTE_BASE}/state`, { method: 'POST' })

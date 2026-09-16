@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import ssl
+import sys
 import threading
 import time
 import urllib.error
@@ -95,6 +96,21 @@ DEFAULT_UA_VERSION = '5.5.2'
 def get_realm_config(realm):
     return REALM_CONFIGS.get(realm) or REALM_CONFIGS["intl"]
 
+def _checkin_claimed(payload):
+    """Read the upstream's claimed/sign-in flag across response revisions."""
+    if not isinstance(payload, dict):
+        return None
+    for key in ("claimed", "hasCheckin", "has_checkin", "isCheckin", "checkedIn", "isClaimed", "received"):
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return value
+    for value in payload.values():
+        if isinstance(value, dict):
+            found = _checkin_claimed(value)
+            if found is not None:
+                return found
+    return None
+
 def _jwt_claims(token):
     try:
         segment = str(token).split(".")[1]
@@ -154,6 +170,7 @@ class Account(object):
         self.cooldown_until = float(data.get("cooldownUntil") or 0)
         self.credits = data.get("credits") or None
         self.last_checkin = data.get("lastCheckin") or None
+        self.checkin_claimed = data.get("checkinClaimed")
 
     def to_dict(self):
         return {
@@ -173,6 +190,7 @@ class Account(object):
             "cooldownUntil": self.cooldown_until,
             "credits": self.credits,
             "lastCheckin": self.last_checkin,
+            "checkinClaimed": self.checkin_claimed,
         }
 
     def public(self):
@@ -196,6 +214,7 @@ class Account(object):
             "file": os.path.basename(self.path) if self.path else None,
             "credits": self.credits,
             "lastCheckin": self.last_checkin,
+            "checkinClaimed": self.checkin_claimed,
             "canCheckin": self.realm == "cn",
             "machineId": derive_id(self.uid, "machine"),
             "sessionId": derive_id(self.uid, "session"),
@@ -308,14 +327,35 @@ class Account(object):
             payload = http_json(url, data=b"{}", method="POST", headers=headers, timeout=15)
             code = payload.get("code", -1)
             msg = payload.get("msg") or "ok"
-            self.last_checkin = time.strftime("%Y-%m-%d %H:%M:%S")
+            claimed = _checkin_claimed(payload.get("data"))
+            if claimed is not None:
+                self.checkin_claimed = claimed
+            # Code 10001 means the daily reward was already claimed.
+            if code == 0 or code == 10001:
+                self.checkin_claimed = True
+                self.last_checkin = time.strftime("%Y-%m-%d %H:%M:%S")
             if self.path and os.path.exists(os.path.dirname(self.path)):
                 self.save(os.path.dirname(self.path))
-            return {"ok": (code == 0 or code == 10001), "code": code, "msg": msg, "data": payload.get("data")}
+            return {"ok": (code == 0 or code == 10001), "claimed": self.checkin_claimed,
+                    "code": code, "msg": msg, "data": payload.get("data")}
         except urllib.error.HTTPError as exc:
             try:
                 body = json.loads(exc.read().decode("utf-8") or "{}")
-                return {"ok": False, "error": body.get("msg") or ("HTTP %d" % exc.code)}
+                claimed = _checkin_claimed(body.get("data"))
+                code = body.get("code")
+                message = body.get("msg") or ("HTTP %d" % exc.code)
+                # The billing API uses an HTTP error for the already-claimed
+                # case on some deployments. Preserve that state as claimed.
+                if code == 10001:
+                    claimed = True
+                if claimed is not None:
+                    self.checkin_claimed = claimed
+                    if claimed:
+                        self.last_checkin = time.strftime("%Y-%m-%d %H:%M:%S")
+                        if self.path and os.path.exists(os.path.dirname(self.path)):
+                            self.save(os.path.dirname(self.path))
+                return {"ok": claimed is True, "claimed": self.checkin_claimed, "code": code, "msg": message,
+                        "error": None if claimed is True else message}
             except Exception:
                 return {"ok": False, "error": "HTTP %d" % exc.code}
         except Exception as exc:
@@ -661,16 +701,29 @@ class AccountPool(object):
             "enabled": True,
         })
         self.add(account)
+        # Read credits after check-in so any daily reward is included.
         if detected_realm == "cn":
-            try: account.checkin()
-            except Exception: pass
+            account.checkin()
+        account.fetch_credits()
         return account
 
 def desktop_auth_dir():
-    local = os.environ.get("LOCALAPPDATA")
-    if not local:
-        local = os.path.join(os.path.expanduser("~"), "AppData", "Local")
-    return os.path.join(local, "CodeBuddyExtension", "Data", "Public", "auth")
+    """Return the platform's desktop credential directory.
+
+    ``WORKBUDDY_DESKTOP_AUTH_DIR`` is an escape hatch for packaged desktop
+    builds that choose a different application data root.
+    """
+    override = os.environ.get("WORKBUDDY_DESKTOP_AUTH_DIR")
+    if override:
+        return os.path.expanduser(override)
+    home = os.path.expanduser("~")
+    if os.name == "nt":
+        root = os.environ.get("LOCALAPPDATA") or os.path.join(home, "AppData", "Local")
+    elif sys.platform == "darwin":
+        root = os.path.join(home, "Library", "Application Support")
+    else:
+        root = os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config")
+    return os.path.join(root, "CodeBuddyExtension", "Data", "Public", "auth")
 
 def desktop_credential_candidates():
     base = desktop_auth_dir()

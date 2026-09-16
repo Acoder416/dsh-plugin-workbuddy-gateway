@@ -1447,13 +1447,16 @@ def open_upstream(payload, session_key=None, target_realm=None):
             account.clear_error()
             return resp, account
         except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403, 429):
+            if exc.code in (401, 403, 429, 502, 503, 504):
                 log("account %s rejected (HTTP %s), rotating" % (account.uid[:8], exc.code))
                 if session_key and POOL:
                     POOL.affinity.unbind(session_key)
-                account.note_error("HTTP %s" % exc.code,
-                                   cooldown=300 if exc.code == 429 else 60,
-                                   single_account=(total <= 1))
+                # Upstream gateway failures do not invalidate the account.
+                # The request-local tried set already prevents repeat attempts.
+                if exc.code in (401, 403, 429):
+                    account.note_error("HTTP %s" % exc.code,
+                                       cooldown=300 if exc.code == 429 else 60,
+                                       single_account=(total <= 1))
                 last_error = exc
                 continue
             raise

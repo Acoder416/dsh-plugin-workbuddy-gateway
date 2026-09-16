@@ -31,6 +31,20 @@ const PATHS = {
   usageDir: 'C:/home/workbuddy/usage',
 }
 
+test('successful quoted HTTP access logs on stderr stay neutral while failures remain errors', async () => {
+  const { gateway, spawner } = harness()
+  const started = gateway.start()
+  spawner.last().announceReady()
+  await started
+  for (const code of [200, 204, 302, 400, 401, 429, 500]) {
+    spawner.last().emitError(`[wb-proxy] 13:36:16 "GET /accounts?realm=cn HTTP/1.1" ${code} -`)
+    assert.equal(gateway.snapshot().log.at(-1).level, code < 400 ? 'log' : 'error')
+  }
+  spawner.last().emitError('Traceback: upstream failed')
+  assert.equal(gateway.snapshot().log.at(-1).level, 'error')
+  await gateway.stop()
+})
+
 /** Yield until a condition holds, or fail the test rather than hanging. */
 async function waitFor(condition, { timeoutMs = 2000, stepMs = 5 } = {}) {
   const deadline = Date.now() + timeoutMs

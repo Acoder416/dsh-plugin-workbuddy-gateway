@@ -48,13 +48,13 @@ export function mount(ctx, deps) {
   }
 
   /** Call one gateway endpoint, returning parsed JSON. */
-  const callGateway = async (route, { method = 'GET', body } = {}) => {
+  const callGateway = async (route, { method = 'GET', body, timeoutMs = GATEWAY_TIMEOUT_MS } = {}) => {
     const base = gateway.baseUrl
     if (base === null) throw new Error('gateway is not running')
     const key = await apiKeyOf()
     const url = `${base.replace(/\/v1$/, '')}${route}`
     const controller = new AbortController()
-    const timer = setTimeout(() => { controller.abort() }, GATEWAY_TIMEOUT_MS)
+    const timer = setTimeout(() => { controller.abort() }, timeoutMs)
     try {
       const response = await fetch(url, {
         method,
@@ -195,7 +195,7 @@ export function mount(ctx, deps) {
     ['/health', false, route(['GET'], {
       handler: () => ({
         ok: true,
-        plugin: { version: '0.1.0', routeBase: ROUTE_BASE },
+        plugin: { version: '0.1.4', routeBase: ROUTE_BASE },
         gateway: gateway.snapshot(),
       }),
     })],
@@ -292,7 +292,7 @@ export function mount(ctx, deps) {
       handler: async (body) => {
         if (typeof body.path !== 'string' || body.path.trim() === '') throw invalid('path is required')
         const result = await callGateway('/accounts/import/desktop', {
-          method: 'POST',
+          method: 'POST', timeoutMs: 180_000,
           body: { path: body.path, ...body.realm === undefined ? {} : { realm: body.realm } },
         })
         return { imported: result.imported ?? [], accounts: result.accounts ?? [] }
@@ -305,6 +305,50 @@ export function mount(ctx, deps) {
         if (typeof body.uid !== 'string' || body.uid.trim() === '') throw invalid('uid is required')
         return { result: await callGateway('/accounts/delete', { method: 'POST', body: { uid: body.uid } }) }
       },
+    })],
+
+    ['/accounts/credits', false, route(['POST'], {
+      mutating: true,
+      handler: async (body) => ({
+        result: await callGateway('/accounts/credits', {
+          method: 'POST', timeoutMs: 180_000,
+          body: body.uid === undefined ? {} : { uid: body.uid },
+        }),
+      }),
+    })],
+
+    ['/accounts/checkin', false, route(['POST'], {
+      mutating: true,
+      handler: async (body) => ({
+        result: await callGateway('/accounts/checkin', {
+          method: 'POST', timeoutMs: 180_000,
+          body: body.uid === undefined ? {} : { uid: body.uid },
+        }),
+      }),
+    })],
+
+    ['/accounts/set', false, route(['POST'], {
+      mutating: true,
+      handler: async (body) => {
+        if (typeof body.uid !== 'string' || body.uid.trim() === '') throw invalid('uid is required')
+        return { result: await callGateway('/accounts/set', {
+          method: 'POST', body: { uid: body.uid, enabled: body.enabled === true },
+        }) }
+      },
+    })],
+
+    ['/accounts/set-all', false, route(['POST'], {
+      mutating: true,
+      handler: async (body) => ({
+        result: await callGateway('/accounts/set-all', {
+          method: 'POST', body: { enabled: body.enabled === true },
+        }),
+      }),
+    })],
+
+    ['/tasks/run', false, route(['POST'], {
+      mutating: true,
+      handler: async () => ({ result: await callGateway('/tasks/run', { method: 'POST', body: {}, timeoutMs: 180_000 }) }),
     })],
 
     ['/accounts/login/start', false, route(['POST'], {
