@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.1.4。** 安装建议固定到 Git 标签 `v0.1.4`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.2.0。** 安装建议固定到 Git 标签 `v0.2.0`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.4"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.0"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.1.4 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.0 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -117,7 +117,9 @@ pnpm --dir "$dsh_profile_dir" add "link:$dsh_plugin_dir"
 
 ### 积分与签到
 
-「刷新积分」查询余额；「签到」调用国内版每日领取接口。上游返回 `code: 10001`（包括 HTTP 错误响应）时，表示当天已经领取，插件也会保存该结果。
+「刷新积分」查询余额；上游下发的精确值保留到小数点后两位，已失效的资源包不计入可用余额。「签到」调用国内版每日领取接口。上游返回 `code: 10001`（包括 HTTP 错误响应）时，表示当天已经领取，插件也会保存该结果。
+
+刷新积分需要实时请求上游，每个账号一次，连接不稳定时会先重试再返回结果。因此「刷新全部积分」在账号较多或网络较差时（例如经由代理访问国际版）可能要等待较久，也可能失败；只关心一个账号时，用账号卡片上的「刷新积分」。
 
 账号卡片显示的是最近保存的领取状态和确认时间，并非持续查询官方签到状态。历史时间不代表今天已领取；需要时点击签到重新确认。国际版不提供此签到功能。
 
@@ -176,10 +178,10 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 
 ```sh
 # 升级到本版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.4"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.0"
 
 # 回退到已有旧版标签
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.1"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.4"
 ```
 
 本地 `link:` 方式，在插件源码目录执行：
@@ -187,8 +189,8 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.1.4
-# 回退时改为：git switch --detach v0.1.1
+git switch --detach v0.2.0
+# 回退时改为：git switch --detach v0.1.4
 ```
 
 如果存在本地修改，先自行保存，避免覆盖。切换版本后重启 DSH 并刷新页面。`link:` 安装的版本由本地目录决定，重新安装其他目录中的副本不会更新正在使用的插件。

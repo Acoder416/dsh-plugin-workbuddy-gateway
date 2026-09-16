@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-09-17
 
 - Restore realm switching fixes omitted from v0.1.4: confirm the gateway realm before saving, read models for the selected realm, and update automatic provider routes.
 - Apply confirmed settings immediately and discard background reads started before a settings write. Display the gateway and model catalog realms separately.
