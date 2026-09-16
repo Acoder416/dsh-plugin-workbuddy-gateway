@@ -401,3 +401,59 @@ test('unmounting disposes every registered route', () => {
   for (const dispose of mounted) dispose()
   assert.equal(server.routes.size, 0)
 })
+
+test('model reads and manual provider sync use the selected realm', async () => {
+  const synced = []
+  const stub = stubGatewayFetch((url) => {
+    const realm = new URL(url).searchParams.get('realm') ?? 'intl'
+    if (url.endsWith('/realm')) return { body: { current: 'intl' } }
+    return { body: { realm, data: [{ id: `${realm}-model` }], accounts: [] } }
+  })
+  try {
+    const { server } = harness({ settings: { realm: 'cn' }, syncProvider: async models => { synced.push(models); return {} } })
+    const state = await server.call(`${ROUTE_BASE}/state`)
+    assert.equal(state.payload.data.models[0].id, 'cn-model')
+    assert.equal(state.payload.data.modelsRealm, 'cn')
+    assert.equal(state.payload.data.activeRealm, 'intl')
+    await server.call(`${ROUTE_BASE}/provider/sync`, { method: 'POST', body: {} })
+    assert.deepEqual(synced, [[{ id: 'cn-model' }]])
+  } finally { stub.restore() }
+})
+
+test('switching realms refreshes the displayed catalog and the automatic provider route', async () => {
+  const previous = globalThis.fetch
+  let active = 'intl'
+  const synced = []
+  globalThis.fetch = async (url, options) => {
+    const path = new URL(url)
+    if (path.pathname === '/realm' && options.method === 'POST') active = JSON.parse(options.body).realm
+    const realm = path.searchParams.get('realm') ?? active
+    return { ok: true, status: 200, text: async () => JSON.stringify(
+      path.pathname === '/realm' ? { current: active } : { realm, data: [{ id: `${realm}-model` }], accounts: [] }
+    ) }
+  }
+  try {
+    const { server } = harness({ syncProvider: async models => { synced.push(models); return {} } })
+    for (const realm of ['cn', 'intl']) {
+      const result = await server.call(`${ROUTE_BASE}/config`, { method: 'POST', body: { realm } })
+      assert.equal(result.payload.ok, true)
+      assert.equal(result.payload.data.activeRealm, realm)
+      assert.equal(result.payload.data.modelsRealm, realm)
+      assert.deepEqual(result.payload.data.models, [{ id: `${realm}-model` }])
+      assert.deepEqual(synced.at(-1), [{ id: `${realm}-model` }])
+    }
+    await server.call(`${ROUTE_BASE}/config`, { method: 'POST', body: { providerSync: false, realm: 'cn' } })
+    assert.equal(synced.length, 2)
+  } finally { globalThis.fetch = previous }
+})
+
+test('an unconfirmed gateway realm switch is reported and does not save the requested realm', async () => {
+  const stub = stubGatewayFetch(() => ({ body: { current: 'intl' } }))
+  try {
+    const { server, updates } = harness({ settings: { realm: 'intl' } })
+    const response = await server.call(`${ROUTE_BASE}/config`, { method: 'POST', body: { realm: 'cn' } })
+    assert.equal(response.payload.ok, false)
+    assert.match(response.payload.error.message, /did not confirm/)
+    assert.deepEqual(updates, [])
+  } finally { stub.restore() }
+})

@@ -86,7 +86,12 @@ window.__ModuleLoader__.load({
         realmCn: '国内版 (codebuddy.cn)',
         realmDefault: '跟随网关当前设置',
         realmNote: '网关运行时切换区域立即生效；停止时在下次启动应用。',
-        realmSwitched: '已保存区域设置。',
+        realmSwitched: '区域设置已保存。请查看网关当前区域和模型清单。',
+        activeRealm: '网关当前区域',
+        modelsRealm: '模型清单所属区域',
+        realmUnknown: '未确认',
+        realmStopped: '网关未运行',
+        realmManual: '自动维护已关闭；请点击「写入模型路由」更新 DSH 模型选项。',
         expires: (text) => `${text} 后过期`,
         disabled: '已停用',
         scan: '扫描桌面端账号',
@@ -191,7 +196,12 @@ window.__ModuleLoader__.load({
         realmCn: 'China (codebuddy.cn)',
         realmDefault: 'Follow the gateway\'s current setting',
         realmNote: 'Realm changes apply immediately while the gateway is running, or on its next start.',
-        realmSwitched: 'Realm setting saved.',
+        realmSwitched: 'Realm saved. Check the active gateway realm and model catalog.',
+        activeRealm: 'Active gateway realm',
+        modelsRealm: 'Model catalog realm',
+        realmUnknown: 'Not confirmed',
+        realmStopped: 'Gateway not running',
+        realmManual: 'Automatic maintenance is off; sync the model route to update the DSH model picker.',
         expires: (text) => `expires in ${text}`,
         disabled: 'disabled',
         scan: 'Scan desktop accounts',
@@ -456,6 +466,8 @@ window.__ModuleLoader__.load({
       const [generation, setGeneration] = React.useState(0)
       const dataRef = React.useRef(null)
       const aliveRef = React.useRef(true)
+      // Reads started before or during a mutation cannot publish stale settings.
+      const mutationRef = React.useRef({ version: 0, pending: false })
 
       React.useEffect(() => {
         aliveRef.current = true
@@ -475,16 +487,16 @@ window.__ModuleLoader__.load({
         const tick = async () => {
           if (cancelled) return
           const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
-          if (!hidden) {
+          if (!hidden && !mutationRef.current.pending) {
+            const version = mutationRef.current.version
             try {
               const data = await getJson('/state')
-              if (!cancelled) {
+              if (!cancelled && version === mutationRef.current.version) {
                 dataRef.current = data
                 setState({ phase: 'ready', data, error: null })
-                setPortDraft((draft) => draft === null ? String(data.settings.port) : draft)
               }
             } catch (error) {
-              if (!cancelled) {
+              if (!cancelled && version === mutationRef.current.version) {
                 setState((current) => ({
                   phase: 'error',
                   data: current.data,
@@ -528,8 +540,33 @@ window.__ModuleLoader__.load({
 
       const refresh = React.useCallback(() => setGeneration((value) => value + 1), [])
 
+      /** Apply confirmed settings and model data before the next background poll. */
+      const applyConfigResult = React.useCallback((result) => {
+        if (!aliveRef.current || result?.settings === undefined) return
+        setState((current) => {
+          if (current.data === null) return current
+          return {
+            ...current,
+            data: {
+              ...current.data,
+              ...result,
+              settings: { ...current.data.settings, ...result.settings },
+              gateway: result.gateway ?? current.data.gateway,
+            },
+          }
+        })
+        dataRef.current = dataRef.current === null ? null : {
+          ...dataRef.current,
+          ...result,
+          settings: { ...dataRef.current.settings, ...result.settings },
+        }
+      }, [])
+
       /** Run one mutating action with busy state and error reporting. */
       const run = React.useCallback(async (label, action, successText) => {
+        if (mutationRef.current.pending) return null
+        mutationRef.current.pending = true
+        mutationRef.current.version += 1
         setBusy(label)
         setMessage(null)
         try {
@@ -542,9 +579,12 @@ window.__ModuleLoader__.load({
         } catch (error) {
           if (aliveRef.current) {
             setMessage({ kind: 'error', text: t.failed(error instanceof Error ? error.message : String(error)) })
+            refresh()
           }
           return null
         } finally {
+          mutationRef.current.pending = false
+          mutationRef.current.version += 1
           if (aliveRef.current) setBusy(null)
         }
       }, [refresh, t])
@@ -567,6 +607,7 @@ window.__ModuleLoader__.load({
       const account = data.account ?? { accounts: [], usable: 0 }
       const provider = data.provider ?? {}
       const models = Array.isArray(data.models) ? data.models : []
+      const realmLabel = (realm) => realm === 'cn' ? t.realmCn : realm === 'intl' ? t.realmIntl : t.realmUnknown
       const running = gateway.state === 'running'
       const accounts = Array.isArray(account.accounts) ? account.accounts : []
       const tone = TONE[gateway.state] ?? TONE.stopped
@@ -604,9 +645,9 @@ window.__ModuleLoader__.load({
           ? h('p', { key: 'lastError', style: style.warn }, gateway.lastError)
           : null,
 
-        data.reads !== undefined && (data.reads.accounts !== null || data.reads.models !== null)
+        data.reads !== undefined && (data.reads.accounts != null || data.reads.models != null || data.reads.realm != null)
           ? h('p', { key: 'readErrors', style: style.warn },
-              `${t.readErrors}: ${[data.reads.accounts, data.reads.models].filter(Boolean).join(' / ')}`)
+              `${t.readErrors}: ${[data.reads.accounts, data.reads.models, data.reads.realm].filter(Boolean).join(' / ')}`)
           : null,
 
         // Gateway facts.
@@ -633,21 +674,30 @@ window.__ModuleLoader__.load({
               onChange: (event) => setPortDraft(event.target.value),
             }),
             action(t.applyPort, () => void run('config', async () => {
-              await postJson('/config', { port: Number(portDraft) })
+              const result = await postJson('/config', { port: Number(portDraft ?? settings.port) })
+              applyConfigResult(result)
               setPortDraft(null)
             }, t.saved)),
             h('label', { style: style.checkboxRow },
               h('input', {
                 type: 'checkbox',
                 checked: settings.autoStart === true,
-                onChange: (event) => void run('config', () => postJson('/config', { autoStart: event.target.checked })),
+                disabled: busy !== null,
+                onChange: (event) => void run('config', async () => {
+                  const result = await postJson('/config', { autoStart: event.target.checked })
+                  applyConfigResult(result)
+                }),
               }),
               t.autostart),
             h('label', { style: style.checkboxRow },
               h('input', {
                 type: 'checkbox',
                 checked: settings.providerSync === true,
-                onChange: (event) => void run('config', () => postJson('/config', { providerSync: event.target.checked })),
+                disabled: busy !== null,
+                onChange: (event) => void run('config', async () => {
+                  const result = await postJson('/config', { providerSync: event.target.checked })
+                  applyConfigResult(result)
+                }),
               }),
               t.autoSync)),
           h('p', { style: style.note }, t.portNote)),
@@ -705,13 +755,16 @@ window.__ModuleLoader__.load({
               disabled: busy !== null,
               onChange: (event) => void run('realm', async () => {
                 const value = event.target.value === '' ? null : event.target.value
-                await postJson('/config', { realm: value })
+                const result = await postJson('/config', { realm: value })
+                applyConfigResult(result)
               }, t.realmSwitched),
             },
               h('option', { value: '' }, t.realmDefault),
               h('option', { value: 'intl' }, t.realmIntl),
               h('option', { value: 'cn' }, t.realmCn))),
+          h('p', { style: style.note }, `${t.activeRealm}: ${running ? realmLabel(data.activeRealm) : t.realmStopped}`),
           h('p', { style: style.note }, t.realmNote),
+          settings.providerSync === false ? h('p', { style: style.note }, t.realmManual) : null,
 
           login !== null
             ? h('p', { style: style.spinner }, t.loginWait)
@@ -803,7 +856,7 @@ window.__ModuleLoader__.load({
         models.length > 0
           ? h('div', { key: 'modelsCard', style: style.card },
               h('div', { style: style.cardTitle }, t.models),
-              h('p', { style: style.note }, t.modelsNote(models.length)),
+              h('p', { style: style.note }, `${t.modelsRealm}: ${realmLabel(data.modelsRealm)} · ${t.modelsNote(models.length)}`),
               h('table', { style: style.table },
                 h('thead', null, h('tr', null,
                   h('th', { style: style.th }, 'ID'),

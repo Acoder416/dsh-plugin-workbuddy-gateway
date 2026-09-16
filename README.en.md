@@ -89,6 +89,8 @@ Alternatively, after installing the dependency, insert the plugin into the profi
 
 ## Accounts, credits, and models
 
+Changing realms updates the account list and model catalog. Automatic route maintenance also updates the DSH model picker; otherwise, sync the model route manually. The page shows the selected realm, active gateway realm, and model catalog realm separately. A switch that the running gateway does not confirm is not saved.
+
 1. Open Settings → WorkBuddy and start the gateway (default `127.0.0.1:18088`).
 2. Select the global or China realm.
 3. Scan and import a desktop credential, or complete browser OAuth.

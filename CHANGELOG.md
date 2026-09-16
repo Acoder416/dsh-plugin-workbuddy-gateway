@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Restore realm switching fixes omitted from v0.1.4: confirm the gateway realm before saving, read models for the selected realm, and update automatic provider routes.
+- Apply confirmed settings immediately and discard background reads started before a settings write. Display the gateway and model catalog realms separately.
+
 ## 0.1.4 — 2026-09-16
 
 - Fix a regression in 0.1.3: HTTP 502/503/504 on multiple accounts applied account cooldowns and made the caller's next retry fail with `no usable account`.

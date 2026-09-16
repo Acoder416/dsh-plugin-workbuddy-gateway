@@ -126,13 +126,16 @@ export function mount(ctx, deps) {
         settings: settingsReading,
         account: { accounts: [], usable: 0, storage: gatewayReading.accountStore },
         models: [],
+        modelsRealm: null,
+        activeRealm: null,
         provider,
-        reads: { accounts: 'gateway not running', models: 'gateway not running' },
+        reads: { accounts: 'gateway not running', models: 'gateway not running', realm: 'gateway not running' },
       }
     }
-    const [accounts, models] = await Promise.all([
+    const [accounts, models, realm] = await Promise.all([
       tryGateway(`/accounts${realmQuery}`),
-      tryGateway('/v1/models'),
+      tryGateway(`/v1/models${realmQuery}`),
+      tryGateway('/realm'),
     ])
     const listed = Array.isArray(accounts.value?.accounts) ? accounts.value.accounts : []
     return {
@@ -144,8 +147,10 @@ export function mount(ctx, deps) {
         storage: accounts.value?.storage ?? gatewayReading.accountStore,
       },
       models: Array.isArray(models.value?.data) ? models.value.data : [],
+      modelsRealm: models.value?.realm ?? null,
+      activeRealm: realm.value?.current ?? null,
       provider,
-      reads: { accounts: accounts.error, models: models.error },
+      reads: { accounts: accounts.error, models: models.error, realm: realm.error },
     }
   }
 
@@ -230,11 +235,19 @@ export function mount(ctx, deps) {
           patch.realm = body.realm
         }
         if (Object.keys(patch).length === 0) throw invalid('no recognized settings key in the request body')
-        await updateSettings(patch)
-        // The realm is runtime-only state inside the gateway, so apply it now
-        // when the gateway is already serving rather than demanding a restart.
         if (patch.realm !== undefined && patch.realm !== null && gateway.running) {
-          await callGateway('/realm', { method: 'POST', body: { realm: patch.realm } })
+          const result = await callGateway('/realm', { method: 'POST', body: { realm: patch.realm } })
+          if (result?.current !== patch.realm) throw new Error('gateway did not confirm the requested realm')
+        }
+        await updateSettings(patch)
+        if (patch.realm !== undefined || patch.providerSync === true) {
+          const reading = await snapshot()
+          if (gateway.running && settings().providerSync) {
+            if (reading.reads.models !== null) throw new Error(reading.reads.models)
+            await syncProvider(reading.models)
+            reading.provider = providerState()
+          }
+          return reading
         }
         return { settings: settings(), gateway: gateway.snapshot() }
       },
@@ -380,7 +393,9 @@ export function mount(ctx, deps) {
           await syncProvider(null)
           return { provider: providerState() }
         }
-        const models = await callGateway('/v1/models')
+        const realm = settings().realm
+        const query = realm === null ? '' : `?realm=${encodeURIComponent(realm)}`
+        const models = await callGateway(`/v1/models${query}`)
         const entry = await syncProvider(Array.isArray(models?.data) ? models.data : [])
         return { provider: providerState(), entry }
       },
