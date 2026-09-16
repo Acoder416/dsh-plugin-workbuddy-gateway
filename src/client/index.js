@@ -298,111 +298,126 @@ window.__ModuleLoader__.load({
       return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`
     }
 
-    /** Tone tokens per state, resolved against the theme's semantic aliases. */
-    const TONE = {
-      running: {
-        fg: 'var(--dsw-alias-state-success-primary, #067647)',
-        bg: 'var(--dsw-alias-state-success-bg, rgba(6,118,71,0.10))',
-      },
-      starting: {
-        fg: 'var(--dsw-alias-state-warn-primary, #b54708)',
-        bg: 'var(--dsw-alias-state-warn-bg, rgba(181,71,8,0.10))',
-      },
-      failed: {
-        fg: 'var(--dsw-alias-state-error-primary, #d92d20)',
-        bg: 'var(--dsw-alias-state-error-bg, rgba(217,45,32,0.10))',
-      },
-      stopped: {
-        fg: 'var(--dsw-alias-label-tertiary, #667085)',
-        bg: 'var(--dsw-alias-bg-layer-2, rgba(102,112,133,0.10))',
-      },
-    }
+    /**
+     * 设置页样式表。
+     *
+     * 对齐 Gitee 上 `iJetLi/deepseek-harness-codearts` 的 Jet Hub 样式
+     * （`plugin-src/client/jet-hub-styles.js`）：CSS 类 + 一次 `<style>` 注入，
+     * 而不是逐元素的行内 style 对象。类名前缀 `dsw-wb-`，对应 Jet Hub 的 `dim-jh-`。
+     *
+     * 色值只走主题变量 `--dsw-alias-*`，并保留浅色兜底；强调色沿用 Jet Hub 的
+     * `#1677ff`，圆角、阴影、hover 过渡也与之一致。
+     */
+    const STYLES = `
+.dsw-wb-page { display: flex; flex-direction: column; gap: 14px; padding: 2px 0 24px; color: var(--dsw-alias-label-primary, #1f2329); }
 
-    const style = {
-      wrap: { display: 'flex', flexDirection: 'column', gap: '14px', padding: '2px 0 24px', color: 'var(--dsw-alias-label-primary, #111)' },
-      intro: { margin: 0, fontSize: '13px', lineHeight: '20px', color: 'var(--dsw-alias-label-tertiary, #667085)' },
-      bar: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
-      barActions: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginLeft: 'auto' },
-      badge: (tone) => ({
-        fontSize: '11px', lineHeight: '16px', padding: '1px 7px', borderRadius: '999px',
-        fontWeight: 600, whiteSpace: 'nowrap', color: tone.fg, background: tone.bg,
-        border: `1px solid ${tone.fg}`,
-      }),
-      stateText: { fontSize: '13px', color: 'var(--dsw-alias-label-secondary, #344054)' },
-      button: {
-        appearance: 'none', font: 'inherit', fontSize: '13px', lineHeight: '20px', padding: '5px 12px',
-        borderRadius: '8px', cursor: 'pointer',
-        border: '1px solid var(--dsw-alias-border-l2, #d0d5dd)',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)',
-        color: 'var(--dsw-alias-label-primary, #111)',
-      },
-      buttonPrimary: {
-        appearance: 'none', font: 'inherit', fontSize: '13px', lineHeight: '20px', padding: '5px 12px',
-        borderRadius: '8px', cursor: 'pointer',
-        border: '1px solid var(--dsw-alias-state-business-primary, #4176e6)',
-        background: 'var(--dsw-alias-state-business-bg, rgba(65,118,230,0.10))',
-        color: 'var(--dsw-alias-state-business-primary, #4176e6)',
-      },
-      buttonDanger: {
-        appearance: 'none', font: 'inherit', fontSize: '13px', lineHeight: '20px', padding: '5px 12px',
-        borderRadius: '8px', cursor: 'pointer',
-        border: '1px solid var(--dsw-alias-state-error-primary, #d92d20)',
-        background: 'var(--dsw-alias-state-error-bg, rgba(217,45,32,0.10))',
-        color: 'var(--dsw-alias-state-error-primary, #d92d20)',
-      },
-      buttonDisabled: { opacity: 0.5, cursor: 'not-allowed' },
-      card: {
-        display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px',
-        border: '1px solid var(--dsw-alias-border-l2, #eaecf0)', borderRadius: '10px',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)', minWidth: 0,
-      },
-      cardTitle: { fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--dsw-alias-label-tertiary, #667085)' },
-      grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px 16px' },
-      field: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
-      fieldLabel: { fontSize: '11px', lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary, #667085)' },
-      fieldValue: { fontSize: '13px', lineHeight: '20px', overflowWrap: 'anywhere' },
-      rowTop: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
-      input: {
-        font: 'inherit', fontSize: '13px', lineHeight: '20px', padding: '4px 8px', width: '110px',
-        borderRadius: '8px', border: '1px solid var(--dsw-alias-border-l2, #d0d5dd)',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit',
-      },
-      select: {
-        font: 'inherit', fontSize: '13px', lineHeight: '20px', padding: '4px 8px',
-        borderRadius: '8px', border: '1px solid var(--dsw-alias-border-l2, #d0d5dd)',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', maxWidth: '100%',
-      },
-      checkboxRow: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--dsw-alias-label-secondary, #344054)' },
-      note: { fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary, #667085)' },
-      notice: { fontSize: '13px', lineHeight: '20px', color: 'var(--dsw-alias-state-error-primary, #d92d20)' },
-      success: { fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-state-success-primary, #067647)' },
-      warn: { fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-state-warn-primary, #b54708)' },
-      accountRow: {
-        display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', flexWrap: 'wrap',
-        border: '1px solid var(--dsw-alias-border-l2, #eaecf0)', borderRadius: '10px',
-      },
-      accountMain: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 },
-      accountName: { fontSize: '13px', fontWeight: 500, overflowWrap: 'anywhere' },
-      mono: {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '11px', lineHeight: '16px', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-      },
-      log: {
-        maxHeight: '240px', overflowY: 'auto', padding: '8px 10px', margin: 0,
-        border: '1px solid var(--dsw-alias-border-l1, #f2f4f7)', borderRadius: '8px',
-        background: 'var(--dsw-alias-bg-layer-2, #f9fafb)',
-      },
-      logLine: { display: 'flex', gap: '8px' },
-      logTime: { color: 'var(--dsw-alias-label-tertiary, #667085)', flexShrink: 0 },
-      logError: { color: 'var(--dsw-alias-state-error-primary, #d92d20)' },
-      table: { width: '100%', borderCollapse: 'collapse', fontSize: '12px' },
-      th: {
-        textAlign: 'left', padding: '4px 8px 4px 0', fontWeight: 600,
-        color: 'var(--dsw-alias-label-tertiary, #667085)',
-        borderBottom: '1px solid var(--dsw-alias-border-l1, #f2f4f7)',
-      },
-      td: { padding: '4px 8px 4px 0', borderBottom: '1px solid var(--dsw-alias-border-l1, #f2f4f7)', verticalAlign: 'top' },
-      spinner: { fontSize: '12px', color: 'var(--dsw-alias-label-tertiary, #667085)' },
+/* 头部：品牌在左，状态与操作在右 */
+.dsw-wb-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.dsw-wb-brand { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dsw-wb-brandName { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; color: var(--dsw-alias-label-primary, #1a1a1a); }
+.dsw-wb-brandDesc { margin: 0; max-width: 72ch; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.dsw-wb-headerActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* 状态徽章 */
+.dsw-wb-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; line-height: 18px; font-weight: 600; white-space: nowrap; }
+.dsw-wb-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.dsw-wb-badge[data-tone="running"] { color: #15803d; background: rgb(34 197 94 / 12%); }
+.dsw-wb-badge[data-tone="starting"] { color: #b45309; background: rgb(227 116 0 / 12%); }
+.dsw-wb-badge[data-tone="failed"] { color: #b3261e; background: rgb(217 48 37 / 12%); }
+.dsw-wb-badge[data-tone="stopped"] { color: var(--dsw-alias-label-tertiary, #8f959e); background: rgb(143 149 158 / 12%); }
+
+/* 卡片 */
+.dsw-wb-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--dsw-alias-border-l2, #eef0f3); border-radius: 14px; background: var(--dsw-alias-bg-layer-3, #fff); box-shadow: 0 2px 8px rgb(31 35 41 / 3%); transition: border-color .16s ease, box-shadow .16s ease; }
+.dsw-wb-card:hover { border-color: color-mix(in srgb, #1677ff 22%, var(--dsw-alias-border-l2, #eef0f3)); box-shadow: 0 5px 16px rgb(31 35 41 / 5%); }
+.dsw-wb-cardHead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.dsw-wb-cardTitle { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--dsw-alias-label-primary, #1f2329); }
+.dsw-wb-cardMeta { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.dsw-wb-spacer { flex: 1 1 auto; }
+
+/* 键值网格：对齐 Jet Hub 的 .dim-jh-accountMeta */
+.dsw-wb-meta { display: grid; gap: 4px; margin: 0; }
+.dsw-wb-metaRow { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: baseline; gap: 10px; }
+.dsw-wb-metaRow dt { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.dsw-wb-metaRow dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary, #646a73); }
+.dsw-wb-metaRow dd.dsw-wb-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 16px; }
+
+/* 表单控件行 */
+.dsw-wb-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dsw-wb-label { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.dsw-wb-input, .dsw-wb-select { font: inherit; font-size: 13px; line-height: 20px; padding: 4px 8px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; background: var(--dsw-alias-bg-layer-3, #fff); color: var(--dsw-alias-label-primary, #1f2329); }
+.dsw-wb-input { width: 110px; }
+.dsw-wb-select { max-width: 100%; }
+.dsw-wb-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary, #646a73); cursor: pointer; }
+
+/* 文字 */
+.dsw-wb-note { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.dsw-wb-empty { margin: 0; padding: 20px; text-align: center; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.dsw-wb-notice { margin: 0; padding: 9px 12px; border: 1px solid var(--dsw-alias-border-l2, #eef0f3); border-radius: 10px; background: var(--dsw-alias-bg-layer-2, #f7f8fa); font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary, #646a73); }
+.dsw-wb-notice[data-tone="ok"] { border-color: color-mix(in srgb, #22c55e 35%, var(--dsw-alias-border-l2, #eef0f3)); background: rgb(34 197 94 / 8%); color: #15803d; }
+.dsw-wb-notice[data-tone="warn"] { border-color: color-mix(in srgb, #e37400 35%, var(--dsw-alias-border-l2, #eef0f3)); background: rgb(227 116 0 / 8%); color: #b45309; }
+.dsw-wb-notice[data-tone="error"] { border-color: color-mix(in srgb, #d93025 35%, var(--dsw-alias-border-l2, #eef0f3)); background: rgb(217 48 37 / 8%); color: #b3261e; }
+
+/* 按钮：对齐 Jet Hub 的 .dim-jh-btn */
+.dsw-wb-btn { font: inherit; font-size: 12px; line-height: 18px; padding: 5px 12px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; background: var(--dsw-alias-bg-layer-3, #fff); color: var(--dsw-alias-label-primary, #1f2329); white-space: nowrap; cursor: pointer; transition: border-color .15s ease, background .15s ease, color .15s ease; }
+.dsw-wb-btn:hover:not(:disabled) { border-color: color-mix(in srgb, #1677ff 40%, var(--dsw-alias-border-l2, #dfe1e5)); background: color-mix(in srgb, #1677ff 6%, var(--dsw-alias-bg-layer-3, #fff)); color: #1677ff; }
+.dsw-wb-btn[data-kind="primary"] { border-color: #1677ff; background: #1677ff; color: #fff; }
+.dsw-wb-btn[data-kind="primary"]:hover:not(:disabled) { border-color: #0f5fce; background: #0f5fce; color: #fff; }
+.dsw-wb-btn[data-kind="danger"] { border-color: color-mix(in srgb, #d93025 35%, var(--dsw-alias-border-l2, #dfe1e5)); color: #d93025; }
+.dsw-wb-btn[data-kind="danger"]:hover:not(:disabled) { border-color: #d93025; background: rgb(217 48 37 / 6%); color: #b3261e; }
+.dsw-wb-btn:disabled { opacity: .5; cursor: default; }
+
+/* 操作按钮组 */
+.dsw-wb-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dsw-wb-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2, #f0f1f3); }
+
+/* 账号 / 扫描结果卡片 */
+.dsw-wb-list { display: grid; gap: 10px; }
+.dsw-wb-account { padding: 12px 14px; border: 1px solid var(--dsw-alias-border-l2, #eef0f3); border-radius: 14px; background: var(--dsw-alias-bg-layer-3, #fff); box-shadow: 0 2px 8px rgb(31 35 41 / 3%); transition: border-color .16s ease, box-shadow .16s ease; }
+.dsw-wb-account:hover { border-color: color-mix(in srgb, #1677ff 22%, var(--dsw-alias-border-l2, #eef0f3)); box-shadow: 0 5px 16px rgb(31 35 41 / 5%); }
+.dsw-wb-account[data-enabled="false"] { opacity: .62; }
+.dsw-wb-accountTop { display: flex; align-items: center; gap: 8px; }
+.dsw-wb-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-label-tertiary, #9aa0a6); }
+.dsw-wb-dot[data-on="true"] { background: #22c55e; box-shadow: 0 0 0 3px rgb(34 197 94 / 14%); }
+.dsw-wb-accountName { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--dsw-alias-label-primary, #1f2329); text-overflow: ellipsis; white-space: nowrap; }
+.dsw-wb-tag { flex: none; padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 17px; font-weight: 500; }
+.dsw-wb-tag[data-tone="on"] { color: #15803d; background: rgb(34 197 94 / 12%); }
+.dsw-wb-tag[data-tone="off"] { color: var(--dsw-alias-label-tertiary, #8f959e); background: rgb(143 149 158 / 12%); }
+.dsw-wb-tag[data-tone="warn"] { color: #b45309; background: rgb(227 116 0 / 12%); }
+.dsw-wb-tag[data-tone="info"] { color: #1677ff; background: rgb(22 119 255 / 10%); }
+.dsw-wb-account .dsw-wb-meta { margin-top: 8px; }
+
+/* 模型表 */
+.dsw-wb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dsw-wb-table th { padding: 6px 8px 6px 0; text-align: left; font-weight: 600; color: var(--dsw-alias-label-tertiary, #8f959e); border-bottom: 1px solid var(--dsw-alias-border-l2, #eef0f3); }
+.dsw-wb-table td { padding: 6px 8px 6px 0; vertical-align: top; color: var(--dsw-alias-label-secondary, #646a73); border-bottom: 1px solid var(--dsw-alias-border-l1, #f4f5f7); }
+.dsw-wb-table tr:last-child td { border-bottom: none; }
+.dsw-wb-table td.dsw-wb-modelId { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--dsw-alias-label-primary, #1f2329); }
+
+/* 日志 */
+.dsw-wb-log { max-height: 240px; margin: 0; padding: 8px 10px; overflow-y: auto; border: 1px solid var(--dsw-alias-border-l1, #f2f4f7); border-radius: 10px; background: var(--dsw-alias-bg-layer-2, #f9fafb); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 16px; }
+.dsw-wb-logLine { display: flex; gap: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dsw-wb-logTime { flex-shrink: 0; color: var(--dsw-alias-label-tertiary, #8f959e); }
+.dsw-wb-logLine[data-level="error"] { color: #d93025; }
+`
+
+    /** 样式只注入一次；重复 mount 不会叠加 `<style>`。 */
+    let stylesInstalled = false
+
+    /**
+     * 把样式表挂到 `document.head`。
+     *
+     * @returns {Function} 卸载函数，随插件 effect 一起释放。
+     */
+    function installStyles() {
+      if (stylesInstalled || typeof document === 'undefined') return () => {}
+      stylesInstalled = true
+      const node = document.createElement('style')
+      node.textContent = STYLES
+      document.head.appendChild(node)
+      return () => {
+        node.remove()
+        stylesInstalled = false
+      }
     }
 
     /** Unwrap the bridge's `{ ok, data }` envelope. */
@@ -435,17 +450,30 @@ window.__ModuleLoader__.load({
       return payload.data
     }
 
-    /** One status badge. */
+    /** 徽章能表达的网关状态；其他任何值都退化成「已停止」。 */
+    const KNOWN_STATES = new Set(['running', 'starting', 'stopped', 'failed'])
+
+    /**
+     * 状态徽章。
+     *
+     * `state` 缺失、为空或不在已知集合里时退化为「已停止」：既不会在渲染期抛错，
+     * 也不会产生一个没有对应 CSS 规则的 `data-tone`（那样徽章会失去配色）。
+     * 渲染期的异常没有 error boundary 兜底，会直接把整个设置页打白。
+     */
     function StateBadge({ state, t }) {
-      const tone = TONE[state] ?? TONE.stopped
-      return h('span', { style: style.badge(tone), title: t.stateHint[state] ?? '' }, t.state[state] ?? state)
+      const tone = typeof state === 'string' && KNOWN_STATES.has(state) ? state : 'stopped'
+      return h('span', {
+        className: 'dsw-wb-badge',
+        'data-tone': tone,
+        title: t?.stateHint?.[tone] ?? '',
+      }, t?.state?.[tone] ?? tone)
     }
 
-    /** A labelled value. */
+    /** 键值网格里的一行「标签 + 值」。 */
     function Field({ label, value, title }) {
-      return h('div', { style: style.field },
-        h('span', { style: style.fieldLabel }, label),
-        h('span', { style: style.fieldValue, title: title ?? String(value ?? '') }, String(value ?? '—')))
+      return h('div', { className: 'dsw-wb-metaRow' },
+        h('dt', null, label),
+        h('dd', { className: 'dsw-wb-mono', title: title ?? String(value ?? '') }, String(value ?? '—')))
     }
 
     /**
@@ -592,14 +620,15 @@ window.__ModuleLoader__.load({
       const data = state.data
 
       if (state.phase === 'loading' && data === null) {
-        return h('div', { style: style.wrap }, h('p', { style: style.note }, t.busy))
+        return h('div', { className: 'dsw-wb-page' }, h('p', { className: 'dsw-wb-note' }, t.busy))
       }
 
       if (data === null) {
-        return h('div', { style: style.wrap },
-          h('p', { style: style.notice }, t.failed(state.error ?? '')),
-          h('p', { style: style.note }, t.hostHint),
-          h('div', { style: style.bar }, h('button', { style: style.button, onClick: refresh }, t.refresh)))
+        return h('div', { className: 'dsw-wb-page' },
+          h('p', { className: 'dsw-wb-notice', 'data-tone': 'error' }, t.failed(state.error ?? '')),
+          h('p', { className: 'dsw-wb-note' }, t.hostHint),
+          h('div', { className: 'dsw-wb-toolbar' },
+            h('button', { className: 'dsw-wb-btn', onClick: refresh }, t.refresh)))
       }
 
       const gateway = data.gateway ?? {}
@@ -610,66 +639,65 @@ window.__ModuleLoader__.load({
       const realmLabel = (realm) => realm === 'cn' ? t.realmCn : realm === 'intl' ? t.realmIntl : t.realmUnknown
       const running = gateway.state === 'running'
       const accounts = Array.isArray(account.accounts) ? account.accounts : []
-      const tone = TONE[gateway.state] ?? TONE.stopped
-
       /** One lifecycle button, disabled while another action is in flight. */
-      const action = (label, onClick, variant) => h('button', {
-        style: {
-          ...(variant === 'primary' ? style.buttonPrimary : variant === 'danger' ? style.buttonDanger : style.button),
-          ...(busy !== null ? style.buttonDisabled : {}),
-        },
+      const action = (label, onClick, kind) => h('button', {
+        className: 'dsw-wb-btn',
+        'data-kind': kind,
         disabled: busy !== null,
         onClick,
       }, label)
 
       const body = [
-        h('p', { key: 'intro', style: style.intro }, t.intro),
-
-        // Status bar: state, endpoint, and the lifecycle controls.
-        h('div', { key: 'bar', style: style.bar },
-          h(StateBadge, { state: gateway.state, t }),
-          h('span', { style: style.stateText },
-            busy !== null ? t.busy : (running ? gateway.baseUrl ?? '' : t.stateHint[gateway.state] ?? '')),
-          h('div', { style: style.barActions },
+        // 头部：品牌、状态徽章与生命周期操作。
+        h('div', { key: 'header', className: 'dsw-wb-header' },
+          h('div', { className: 'dsw-wb-brand' },
+            h('h2', { className: 'dsw-wb-brandName' }, t.nav),
+            h('p', { className: 'dsw-wb-brandDesc' }, t.intro)),
+          h('div', { className: 'dsw-wb-headerActions' },
+            h(StateBadge, { state: gateway.state, t }),
             running
               ? action(t.restart, () => void run('restart', () => postJson('/gateway/restart')), undefined)
               : action(t.start, () => void run('start', () => postJson('/gateway/start')), 'primary'),
             running ? action(t.stop, () => void run('stop', () => postJson('/gateway/stop')), undefined) : null,
             action(t.refresh, refresh, undefined))),
 
+        h('p', { key: 'stateLine', className: 'dsw-wb-note' },
+          busy !== null ? t.busy : (running ? String(gateway.baseUrl ?? '') : t.stateHint[gateway.state] ?? '')),
+
         message !== null
-          ? h('p', { key: 'message', style: message.kind === 'error' ? style.notice : style.success }, message.text)
+          ? h('p', { key: 'message', className: 'dsw-wb-notice', 'data-tone': message.kind === 'error' ? 'error' : 'ok' }, message.text)
           : null,
 
         gateway.lastError !== null && gateway.lastError !== undefined
-          ? h('p', { key: 'lastError', style: style.warn }, gateway.lastError)
+          ? h('p', { key: 'lastError', className: 'dsw-wb-notice', 'data-tone': 'error' }, String(gateway.lastError))
           : null,
 
-        data.reads !== undefined && (data.reads.accounts != null || data.reads.models != null || data.reads.realm != null)
-          ? h('p', { key: 'readErrors', style: style.warn },
+        data.reads !== undefined && data.reads !== null
+          && (data.reads.accounts != null || data.reads.models != null || data.reads.realm != null)
+          ? h('p', { key: 'readErrors', className: 'dsw-wb-notice', 'data-tone': 'warn' },
               `${t.readErrors}: ${[data.reads.accounts, data.reads.models, data.reads.realm].filter(Boolean).join(' / ')}`)
           : null,
 
-        // Gateway facts.
-        h('div', { key: 'gatewayCard', style: style.card },
-          h('div', { style: style.cardTitle }, t.gateway),
-          h('div', { style: style.grid },
+        // 网关主体。
+        h('section', { key: 'gatewayCard', className: 'dsw-wb-card' },
+          h('div', { className: 'dsw-wb-cardHead' },
+            h('h3', { className: 'dsw-wb-cardTitle' }, t.gateway)),
+          h('dl', { className: 'dsw-wb-meta' },
             h(Field, { key: 'endpoint', label: t.endpoint, value: gateway.baseUrl ?? '—' }),
             h(Field, { key: 'pid', label: t.pid, value: gateway.pid ?? '—' }),
-            h(Field, { key: 'uptime', label: t.uptime, value: gateway.uptimeMs === null ? '—' : humanDuration(gateway.uptimeMs) }),
-            // The interpreter is shown because it is resolved, not configured: on
-            // a platform whose Python is named differently the probe picks one,
-            // and this reading is how an operator learns which.
+            h(Field, { key: 'uptime', label: t.uptime, value: gateway.uptimeMs === null || gateway.uptimeMs === undefined ? '—' : humanDuration(gateway.uptimeMs) }),
+            // 解释器是探测出来的而不是配置的：在把 Python 叫成别的名字的平台上，
+            // 这一行是操作者了解插件最终选了哪个解释器的唯一途径。
             h(Field, { key: 'python', label: t.pythonPath, value: gateway.pythonPath }),
             h(Field, { key: 'platform', label: t.platform, value: gateway.platform }),
             h(Field, { key: 'script', label: t.script, value: gateway.script }),
             h(Field, { key: 'accountsStore', label: t.accountStore, value: gateway.accountStore }),
             h(Field, { key: 'usageStore', label: t.usageStore, value: gateway.usageStore })),
-          h('div', { style: style.rowTop },
-            h('span', { style: style.fieldLabel }, t.port),
+          h('div', { className: 'dsw-wb-field' },
+            h('span', { className: 'dsw-wb-label' }, t.port),
             h('input', {
-              style: style.input,
-              value: portDraft ?? String(settings.port),
+              className: 'dsw-wb-input',
+              value: portDraft ?? String(settings.port ?? ''),
               inputMode: 'numeric',
               onChange: (event) => setPortDraft(event.target.value),
             }),
@@ -678,7 +706,7 @@ window.__ModuleLoader__.load({
               applyConfigResult(result)
               setPortDraft(null)
             }, t.saved)),
-            h('label', { style: style.checkboxRow },
+            h('label', { className: 'dsw-wb-check' },
               h('input', {
                 type: 'checkbox',
                 checked: settings.autoStart === true,
@@ -689,7 +717,7 @@ window.__ModuleLoader__.load({
                 }),
               }),
               t.autostart),
-            h('label', { style: style.checkboxRow },
+            h('label', { className: 'dsw-wb-check' },
               h('input', {
                 type: 'checkbox',
                 checked: settings.providerSync === true,
@@ -700,27 +728,27 @@ window.__ModuleLoader__.load({
                 }),
               }),
               t.autoSync)),
-          h('p', { style: style.note }, t.portNote)),
+          h('p', { className: 'dsw-wb-note' }, t.portNote)),
 
-        // Credential.
-        h('div', { key: 'keyCard', style: style.card },
-          h('div', { style: style.rowTop },
-            h('span', { style: style.cardTitle }, t.key),
-            h('span', { style: style.fieldValue }, settings.keyConfigured === true ? t.keySet : t.keyUnset),
-            h('span', { style: { flex: 1 } }),
+        // 接口密钥。
+        h('section', { key: 'keyCard', className: 'dsw-wb-card' },
+          h('div', { className: 'dsw-wb-cardHead' },
+            h('h3', { className: 'dsw-wb-cardTitle' }, t.key),
+            h('span', { className: 'dsw-wb-cardMeta' }, settings.keyConfigured === true ? t.keySet : t.keyUnset),
+            h('span', { className: 'dsw-wb-spacer' }),
             action(t.generateKey, () => void run('key', async () => {
               const result = await postJson('/key', { action: 'generate' })
               if (result?.value !== undefined) setMessage({ kind: 'ok', text: t.keyOnce(result.value) })
             }), undefined),
             action(t.clearKey, () => void run('key', () => postJson('/key', { action: 'clear' }), t.saved), undefined)),
-          h('p', { style: style.note }, t.keyNote)),
+          h('p', { className: 'dsw-wb-note' }, t.keyNote)),
 
-        // Accounts.
-        h('div', { key: 'accountsCard', style: style.card },
-          h('div', { style: style.rowTop },
-            h('span', { style: style.cardTitle }, t.accounts),
-            h('span', { style: style.fieldValue }, t.accountUsable(account.usable ?? 0, accounts.length)),
-            h('span', { style: { flex: 1 } }),
+        // 账号。
+        h('section', { key: 'accountsCard', className: 'dsw-wb-card' },
+          h('div', { className: 'dsw-wb-cardHead' },
+            h('h3', { className: 'dsw-wb-cardTitle' }, t.accounts),
+            h('span', { className: 'dsw-wb-cardMeta' }, t.accountUsable(account.usable ?? 0, accounts.length)),
+            h('span', { className: 'dsw-wb-spacer' }),
             action(t.scan, () => void run('scan', async () => {
               const result = await postJson('/accounts/scan')
               setScan(result.scan ?? null)
@@ -729,11 +757,11 @@ window.__ModuleLoader__.load({
               const result = await postJson('/accounts/login/start', { realm: settings.realm === 'cn' ? 'cn' : 'intl' })
               const started = result.login ?? {}
               setLogin(started)
-              // The gateway names the authorization URL `authUrl`.
+              // 网关把授权地址命名为 authUrl。
               if (typeof started.authUrl === 'string') window.open(started.authUrl, '_blank', 'noopener')
               setMessage({ kind: 'ok', text: t.loginStarted })
             }), undefined)),
-          h('div', { style: style.rowTop },
+          h('div', { className: 'dsw-wb-toolbar' },
             action(t.refreshCredits, () => void run('credits', () => postJson('/accounts/credits'), undefined), undefined),
             settings.realm === 'cn'
               ? action(t.claimCredits, () => void run('tasks', () => postJson('/tasks/run'), t.taskClaimed), undefined)
@@ -744,13 +772,11 @@ window.__ModuleLoader__.load({
             action(t.enableAll, () => void run('enable-all', () => postJson('/accounts/set-all', { enabled: true }), t.saved), undefined),
             action(t.disableAll, () => void run('disable-all', () => postJson('/accounts/set-all', { enabled: false }), t.saved), undefined)),
 
-          // The realm selector lives here, not in the gateway card, because this
-          // is the list it filters: a second account in the other realm is
-          // invisible until this changes.
-          h('div', { style: style.rowTop },
-            h('span', { style: style.fieldLabel }, t.realm),
+          // 区域选择放在这张卡片里而不是网关卡片：它过滤的正是下面这张账号列表。
+          h('div', { className: 'dsw-wb-field' },
+            h('span', { className: 'dsw-wb-label' }, t.realm),
             h('select', {
-              style: style.select,
+              className: 'dsw-wb-select',
               value: settings.realm ?? '',
               disabled: busy !== null,
               onChange: (event) => void run('realm', async () => {
@@ -762,79 +788,85 @@ window.__ModuleLoader__.load({
               h('option', { value: '' }, t.realmDefault),
               h('option', { value: 'intl' }, t.realmIntl),
               h('option', { value: 'cn' }, t.realmCn))),
-          h('p', { style: style.note }, `${t.activeRealm}: ${running ? realmLabel(data.activeRealm) : t.realmStopped}`),
-          h('p', { style: style.note }, t.realmNote),
-          settings.providerSync === false ? h('p', { style: style.note }, t.realmManual) : null,
+          h('p', { className: 'dsw-wb-note' }, `${t.activeRealm}: ${running ? realmLabel(data.activeRealm) : t.realmStopped}`),
+          h('p', { className: 'dsw-wb-note' }, t.realmNote),
+          settings.providerSync === false ? h('p', { className: 'dsw-wb-note' }, t.realmManual) : null,
 
           login !== null
-            ? h('p', { style: style.spinner }, t.loginWait)
+            ? h('p', { className: 'dsw-wb-note' }, t.loginWait)
             : null,
 
           accounts.length === 0
-            ? h('p', { style: style.note }, t.noAccounts)
-            : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } }, accounts.map((entry) => h('div', {
+            ? h('p', { className: 'dsw-wb-empty' }, t.noAccounts)
+            : h('div', { className: 'dsw-wb-list' }, accounts.map((entry) => h('div', {
                 key: entry.uid,
-                style: style.accountRow,
+                className: 'dsw-wb-account',
+                'data-enabled': entry.enabled === false ? 'false' : 'true',
               },
-                h('div', { style: style.accountMain },
-                  h('span', { style: style.accountName }, entry.nickname ?? entry.uid),
-                  h('span', { style: style.note },
-                    [entry.realmName ?? entry.realm, entry.expiresIn === undefined ? null : t.expires(entry.expiresIn), entry.enabled === false ? t.disabled : null,
-                      entry.credits?.remain === undefined ? null : t.creditBalance(entry.credits.remain),
-                      entry.realm === 'cn' ? (entry.checkinClaimed === true || (entry.checkinClaimed === undefined && entry.lastCheckin)
-                        ? t.checkedIn(entry.lastCheckin) : t.notCheckedIn) : null]
-                      .filter(Boolean).join(' · '))),
-                h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
-                  action(t.refreshCredits, () => void run(`credits-${entry.uid}`, () => postJson('/accounts/credits', { uid: entry.uid }), undefined), undefined),
-                  entry.realm === 'cn'
-                    ? action(t.checkin, () => void run(`checkin-${entry.uid}`, () => postJson('/accounts/checkin', { uid: entry.uid }), t.saved), undefined)
-                    : null,
-                  action(entry.enabled === false ? t.enable : t.disable,
-                    () => void run(`set-${entry.uid}`, () => postJson('/accounts/set', { uid: entry.uid, enabled: entry.enabled === false }), t.saved), undefined)),
+                h('div', { className: 'dsw-wb-accountTop' },
+                  h('span', { className: 'dsw-wb-dot', 'data-on': entry.enabled === false ? 'false' : 'true' }),
+                  h('span', { className: 'dsw-wb-accountName' }, entry.nickname ?? entry.uid),
+                  entry.enabled === false ? h('span', { className: 'dsw-wb-tag', 'data-tone': 'off' }, t.disabled) : null),
+                h('p', { className: 'dsw-wb-note' },
+                  [entry.realmName ?? entry.realm, entry.expiresIn === undefined ? null : t.expires(entry.expiresIn),
+                    entry.credits?.remain === undefined ? null : t.creditBalance(entry.credits.remain),
+                    entry.realm === 'cn' ? (entry.checkinClaimed === true || (entry.checkinClaimed === undefined && entry.lastCheckin)
+                      ? t.checkedIn(entry.lastCheckin) : t.notCheckedIn) : null]
+                    .filter(Boolean).join(' · ')),
                 confirmUid === entry.uid
-                  ? h('div', { style: { display: 'flex', gap: '6px' } },
+                  ? h('div', { className: 'dsw-wb-actions' },
                       h('button', {
-                        style: style.buttonDanger,
+                        className: 'dsw-wb-btn',
+                        'data-kind': 'danger',
                         disabled: busy !== null,
                         onClick: () => void run('delete', async () => {
                           await postJson('/accounts/delete', { uid: entry.uid })
                           setConfirmUid(null)
                         }, t.saved),
                       }, t.confirmRemove),
-                      h('button', { style: style.button, onClick: () => setConfirmUid(null) }, t.cancel))
-                  : h('button', { style: style.button, disabled: busy !== null, onClick: () => setConfirmUid(entry.uid) }, t.remove)))),
+                      h('button', { className: 'dsw-wb-btn', onClick: () => setConfirmUid(null) }, t.cancel))
+                  : h('div', { className: 'dsw-wb-actions' },
+                      action(t.refreshCredits, () => void run(`credits-${entry.uid}`, () => postJson('/accounts/credits', { uid: entry.uid }), undefined), undefined),
+                      entry.realm === 'cn'
+                        ? action(t.checkin, () => void run(`checkin-${entry.uid}`, () => postJson('/accounts/checkin', { uid: entry.uid }), t.saved), undefined)
+                        : null,
+                      action(entry.enabled === false ? t.enable : t.disable,
+                        () => void run(`set-${entry.uid}`, () => postJson('/accounts/set', { uid: entry.uid, enabled: entry.enabled === false }), t.saved), undefined),
+                      h('button', { className: 'dsw-wb-btn', disabled: busy !== null, onClick: () => setConfirmUid(entry.uid) }, t.remove))))),
 
-          h('p', { style: style.note }, t.accountScopeNote),
-          h('p', { style: style.note }, t.scanNote),
+          h('p', { className: 'dsw-wb-note' }, t.accountScopeNote),
+          h('p', { className: 'dsw-wb-note' }, t.scanNote),
 
           scan !== null && Array.isArray(scan.detected) && scan.detected.length > 0
-            ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } }, scan.detected.map((found) => h('div', {
+            ? h('div', { className: 'dsw-wb-list' }, scan.detected.map((found) => h('div', {
                 key: found.path,
-                style: style.accountRow,
+                className: 'dsw-wb-account',
               },
-                h('div', { style: style.accountMain },
-                  h('span', { style: style.accountName }, found.nickname ?? found.file),
-                  h('span', { style: style.note },
-                    [found.realmName, found.expiresIn === undefined ? null : t.expires(found.expiresIn), found.valid === false ? found.error : null]
-                      .filter(Boolean).join(' · '))),
-                h('button', {
-                  style: style.buttonPrimary,
-                  disabled: busy !== null || found.valid === false,
-                  onClick: () => void run('import', async () => {
-                    await postJson('/accounts/import', { path: found.path, realm: found.realm })
-                    setScan(null)
-                  }, t.imported(found.nickname ?? found.file)),
-                }, t.import))))
+                h('div', { className: 'dsw-wb-accountTop' },
+                  h('span', { className: 'dsw-wb-accountName' }, found.nickname ?? found.file)),
+                h('p', { className: 'dsw-wb-note' },
+                  [found.realmName, found.expiresIn === undefined ? null : t.expires(found.expiresIn), found.valid === false ? found.error : null]
+                    .filter(Boolean).join(' · ')),
+                h('div', { className: 'dsw-wb-actions' },
+                  h('button', {
+                    className: 'dsw-wb-btn',
+                    'data-kind': 'primary',
+                    disabled: busy !== null || found.valid === false,
+                    onClick: () => void run('import', async () => {
+                      await postJson('/accounts/import', { path: found.path, realm: found.realm })
+                      setScan(null)
+                    }, t.imported(found.nickname ?? found.file)),
+                  }, t.import)))))
             : null),
 
-        // Provider route.
-        h('div', { key: 'providerCard', style: style.card },
-          h('div', { style: style.rowTop },
-            h('span', { style: style.cardTitle }, t.provider),
-            h('span', { style: style.fieldValue }, provider.present === true
+        // 模型路由。
+        h('section', { key: 'providerCard', className: 'dsw-wb-card' },
+          h('div', { className: 'dsw-wb-cardHead' },
+            h('h3', { className: 'dsw-wb-cardTitle' }, t.provider),
+            h('span', { className: 'dsw-wb-cardMeta' }, provider.present === true
               ? `${t.providerPresent} · ${String(provider.modelCount ?? 0)}`
               : t.providerAbsent),
-            h('span', { style: { flex: 1 } }),
+            h('span', { className: 'dsw-wb-spacer' }),
             provider.present === true
               ? action(t.providerRemove, () => void run('provider', async () => {
                   await postJson('/provider/sync', { action: 'remove' })
@@ -844,52 +876,55 @@ window.__ModuleLoader__.load({
                   const count = result.entry?.models?.length ?? 0
                   setMessage({ kind: 'ok', text: t.providerSynced(count) })
                 }, undefined), 'primary')),
-          h('p', { style: style.note }, provider.present === true ? t.providerNote : t.providerNote + ' ' + (running ? '' : t.providerWaiting)),
+          h('p', { className: 'dsw-wb-note' }, provider.present === true ? t.providerNote : t.providerNote + ' ' + (running ? '' : t.providerWaiting)),
           Array.isArray(provider.routes) && provider.routes.length > 0
-            ? h('p', { style: style.mono }, provider.routes.join(', '))
+            ? h('p', { className: 'dsw-wb-note dsw-wb-mono' }, provider.routes.join(', '))
             : null,
           provider.reason !== null && provider.reason !== undefined
-            ? h('p', { style: style.warn }, provider.reason)
+            ? h('p', { className: 'dsw-wb-notice', 'data-tone': 'warn' }, String(provider.reason))
             : null),
 
-        // Models.
+        // 模型清单。
         models.length > 0
-          ? h('div', { key: 'modelsCard', style: style.card },
-              h('div', { style: style.cardTitle }, t.models),
-              h('p', { style: style.note }, `${t.modelsRealm}: ${realmLabel(data.modelsRealm)} · ${t.modelsNote(models.length)}`),
-              h('table', { style: style.table },
+          ? h('section', { key: 'modelsCard', className: 'dsw-wb-card' },
+              h('div', { className: 'dsw-wb-cardHead' },
+                h('h3', { className: 'dsw-wb-cardTitle' }, t.models),
+                h('span', { className: 'dsw-wb-cardMeta' }, `${t.modelsRealm}: ${realmLabel(data.modelsRealm)} · ${t.modelsNote(models.length)}`)),
+              h('table', { className: 'dsw-wb-table' },
                 h('thead', null, h('tr', null,
-                  h('th', { style: style.th }, 'ID'),
-                  h('th', { style: style.th }, t.modelContext),
-                  h('th', { style: style.th }, t.modelOutput),
-                  h('th', { style: style.th }, t.modelReasoning),
-                  h('th', { style: style.th }, t.modelVision))),
+                  h('th', null, 'ID'),
+                  h('th', null, t.modelContext),
+                  h('th', null, t.modelOutput),
+                  h('th', null, t.modelReasoning),
+                  h('th', null, t.modelVision))),
                 h('tbody', null, models.map((model) => h('tr', { key: model.id },
-                  h('td', { style: style.td }, model.id),
-                  h('td', { style: style.td }, humanCount(model.context_length ?? model.max_input_tokens)),
-                  h('td', { style: style.td }, humanCount(model.max_output_tokens ?? model.max_completion_tokens)),
-                  h('td', { style: style.td }, model.reasoning_fixed_effort !== undefined
+                  h('td', { className: 'dsw-wb-modelId' }, model.id),
+                  h('td', null, humanCount(model.context_length ?? model.max_input_tokens)),
+                  h('td', null, humanCount(model.max_output_tokens ?? model.max_completion_tokens)),
+                  h('td', null, model.reasoning_fixed_effort !== undefined
                     ? `${model.reasoning_fixed_effort} (fixed)`
                     : Array.isArray(model.reasoning_efforts) ? model.reasoning_efforts.join(', ') : '—'),
-                  h('td', { style: style.td }, (model.input_modalities ?? model.modalities?.input ?? []).includes('image') ? '✓' : '—'))))))
-            : null,
+                  h('td', null, (model.input_modalities ?? model.modalities?.input ?? []).includes('image') ? '✓' : '—'))))))
+          : null,
 
-        // Log.
-        h('div', { key: 'logCard', style: style.card },
-          h('div', { style: style.cardTitle }, t.log),
+        // 日志。
+        h('section', { key: 'logCard', className: 'dsw-wb-card' },
+          h('div', { className: 'dsw-wb-cardHead' },
+            h('h3', { className: 'dsw-wb-cardTitle' }, t.log)),
           Array.isArray(gateway.log) && gateway.log.length > 0
-            ? h('div', { style: style.log }, h('div', { style: style.mono }, gateway.log.slice(-120).map((entry) => h('div', {
+            ? h('div', { className: 'dsw-wb-log' }, gateway.log.slice(-120).map((entry) => h('div', {
                 key: entry.seq,
-                style: style.logLine,
+                className: 'dsw-wb-logLine',
+                'data-level': entry.level === 'error' ? 'error' : 'log',
               },
-                h('span', { style: style.logTime }, new Date(entry.at).toLocaleTimeString()),
-                h('span', { style: entry.level === 'error' ? style.logError : undefined }, entry.text)))))
-            : h('p', { style: style.note }, t.logEmpty)),
+                h('span', { className: 'dsw-wb-logTime' }, new Date(entry.at).toLocaleTimeString()),
+                h('span', null, entry.text))))
+            : h('p', { className: 'dsw-wb-note' }, t.logEmpty)),
 
-        h('p', { key: 'hostHint', style: style.note }, t.hostHint),
+        h('p', { key: 'hostHint', className: 'dsw-wb-note' }, t.hostHint),
       ]
 
-      return h('div', { style: style.wrap }, body)
+      return h('div', { className: 'dsw-wb-page' }, body)
     }
 
     /**
@@ -903,6 +938,13 @@ window.__ModuleLoader__.load({
      * @param {object} ctx - client context carrying the slot registry.
      */
     function apply(ctx) {
+      // 样式表随插件 mount 注入一次，并在卸载时移除；宿主没提供 effect 时
+      // 直接注入，页面上最多留一份 `<style>`。
+      if (typeof ctx.effect === 'function') {
+        ctx.effect(() => installStyles(), 'dsh-plugin-workbuddy-gateway: styles')
+      } else {
+        installStyles()
+      }
       ctx.slots.inject('settings.section', () => ctx.slots.register({
         name: 'settings.section',
         id: 'workbuddy-gateway',

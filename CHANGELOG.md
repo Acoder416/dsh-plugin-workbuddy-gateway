@@ -4,6 +4,8 @@
 
 - Restore realm switching fixes omitted from v0.1.4: confirm the gateway realm before saving, read models for the selected realm, and update automatic provider routes.
 - Apply confirmed settings immediately and discard background reads started before a settings write. Display the gateway and model catalog realms separately.
+- Rebuild the settings page on the Jet Hub style system (`iJetLi/deepseek-harness-codearts`): one injected stylesheet and `dsw-wb-*` classes over the theme's `--dsw-alias-*` tokens, replacing the per-element inline `style` objects. Adds a brand header, rounded cards with hover feedback, a status badge, account cards, and a per-section toolbar.
+- Harden the settings page against a malformed `/state` reading: a gateway state outside `running` / `starting` / `stopped` / `failed` now renders as stopped instead of emitting a `data-tone` no stylesheet matches. Render-phase failures have no error boundary, so this class of bug blanks the whole settings panel.
 
 ## 0.1.4 — 2026-09-16
 
