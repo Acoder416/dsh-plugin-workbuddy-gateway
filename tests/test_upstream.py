@@ -50,8 +50,8 @@ class UpstreamTests(unittest.TestCase):
         self.assertEqual([args.args[0].get_header('Authorization') for args in call.call_args_list],
                          ['Bearer fake-0', 'Bearer fake-1', 'Bearer fake-2'])
         self.assertEqual(self.pool.affinity.get('conversation'), 'global-2')
-        self.assertFalse(self.pool.accounts[0].ready())
-        self.assertFalse(self.pool.accounts[1].ready())
+        self.assertTrue(self.pool.accounts[0].ready())
+        self.assertTrue(self.pool.accounts[1].ready())
         self.assertEqual(self.pool.accounts[3].last_error, '')
 
     def test_all_global_accounts_failing_returns_last_error_without_crossing_realms(self):
@@ -62,6 +62,19 @@ class UpstreamTests(unittest.TestCase):
         self.assertIs(raised.exception, last)
         self.assertEqual(call.call_count, 3)
         self.assertIsNone(self.pool.affinity.get('conversation'))
+
+    def test_retry_after_region_wide_5xx_can_still_use_the_accounts(self):
+        with patch.object(wb_accounts.time, 'time', return_value=10000):
+            with patch.object(wb_proxy.urllib.request, 'urlopen', side_effect=[upstream_error(502), upstream_error(504), upstream_error(502)]):
+                with self.assertRaises(HTTPError):
+                    wb_proxy.open_upstream(self.payload, session_key='retry', target_realm='intl')
+            with patch.object(wb_accounts.time, 'time', return_value=10002):
+                success = io.BytesIO(b'data: [DONE]\n\n')
+                with patch.object(wb_proxy.urllib.request, 'urlopen', return_value=success) as call:
+                    response, account = wb_proxy.open_upstream(self.payload, session_key='retry', target_realm='intl')
+                self.assertIs(response, success)
+                self.assertEqual(account.realm, 'intl')
+                self.assertEqual(call.call_count, 1)
 
     def test_single_account_attempt_is_bounded(self):
         self.pool.accounts = self.pool.accounts[:1]
@@ -85,6 +98,9 @@ class UpstreamTests(unittest.TestCase):
                     _, account = wb_proxy.open_upstream(self.payload, target_realm='intl')
                 self.assertEqual(account.uid, 'global-1')
                 self.assertEqual(call.call_count, 2)
+                self.assertEqual(self.pool.accounts[0].ready(), code in (502, 503, 504))
+                if code in (502, 503, 504):
+                    self.assertEqual(self.pool.accounts[0].last_error, '')
 
     def test_invalid_request_does_not_rotate_accounts(self):
         with patch.object(wb_proxy.urllib.request, 'urlopen', side_effect=upstream_error(400)) as call:

@@ -30,6 +30,10 @@ received rather than attributed to a name its own text does not state.
 connection-stage account failover. `tests/test_upstream.py` exercises the real
 account pool with simulated upstream responses and no live credentials.
 
+**Modifications in 0.1.4.** Upstream 502/503/504 failover does not cool down
+accounts; request-local attempt tracking bounds retries without blocking the
+caller's next request. Authentication and rate-limit cooldowns are preserved.
+
 A local `.npmignore` excludes Python bytecode and account state from npm packages.
 
 `tests/test_accounts.py` covers these changes with offline fixtures. Preserve or

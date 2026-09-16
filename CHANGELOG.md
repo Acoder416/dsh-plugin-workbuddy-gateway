@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 — 2026-09-16
+
+- Fix a regression in 0.1.3: HTTP 502/503/504 on multiple accounts applied account cooldowns and made the caller's next retry fail with `no usable account`.
+- Keep failover bounded by the request's tried-account set without cooling down accounts for these upstream gateway errors. Preserve cooldowns for authentication failures, rate limiting, and network exceptions.
+- Add a regression reproducing three upstream failures followed by a caller retry two seconds later.
+
 ## 0.1.3 — 2026-09-16
 
 - Treat upstream HTTP 502/503/504 during model connection setup as account-failover candidates, alongside 401/403/429 and network errors. Previously these gateway errors immediately failed the request without trying another available account.

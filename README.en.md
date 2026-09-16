@@ -4,7 +4,7 @@ Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model rout
 
 [中文](README.md) | English
 
-**Version: 0.1.3.** Install from the fixed Git tag `v0.1.3`; `v0.1.1` remains available for rollback. No plugin market is required.
+**Version: 0.1.4.** Install from the fixed Git tag `v0.1.4`; `v0.1.1` remains available for rollback. No plugin market is required.
 
 This is an unofficial integration using WorkBuddy subscription endpoints and DSH internal APIs. Those interfaces can change, and using them may violate service terms or trigger account restrictions.
 
@@ -24,7 +24,7 @@ Python detection tries `python`, then `python3` on Windows, and the reverse orde
 Use an existing, initialized web profile:
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.4"
 ```
 
 Then append `dsh-plugin-workbuddy-gateway` to the existing `dsh.profile.bundles` array in the profile's `package.json`. Preserve its other entries. The default profile directory is `~/.dsh/profiles/web`, or `$DSH_HOME/profiles/web` when configured.
@@ -50,7 +50,7 @@ Restart **DSH itself**, then refresh the browser. Restarting only the Python gat
 Keep the checkout in a permanent directory:
 
 ```sh
-git clone --branch v0.1.3 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.1.4 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -101,7 +101,7 @@ Desktop imports attempt CN daily check-in before reading credits; global imports
 
 **Claim credits** invokes the bundled gateway's growth-task workflow, separate from daily check-in. It depends on upstream activity endpoints and does not guarantee rewards.
 
-Without a session binding, the gateway rotates across available accounts in the same realm. Bound sessions prefer their existing account. During connection setup, HTTP 401/403/429/502/503/504 and network exceptions trigger cooldown and another account attempt. Each candidate is tried at most once per request. With no alternative or all accounts failing, the error is still returned. Other HTTP errors and failures after streaming starts do not guarantee failover. Accounts do not cross realms.
+Without a session binding, the gateway rotates across available accounts in the same realm. Bound sessions prefer their existing account. During connection setup, HTTP 401/403/429 and network exceptions trigger cooldown and another account attempt. HTTP 502/503/504 also try another account but do not apply account cooldown, so a temporary upstream outage does not block the entire pool on the next request. Each candidate is tried at most once per request. With no alternative or all accounts failing, the error is still returned. Other HTTP errors and failures after streaming starts do not guarantee failover. Accounts do not cross realms.
 
 The desktop app does not need to stay open after import. Logging out of it does not necessarily revoke the gateway's saved tokens.
 
@@ -136,7 +136,7 @@ Stop DSH and back up the profile configuration, lockfile, and WorkBuddy state be
 
 ```sh
 # Upgrade
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.4"
 # Roll back
 dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.1"
 ```
@@ -146,7 +146,7 @@ For a linked checkout:
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.1.3
+git switch --detach v0.1.4
 # To roll back: git switch --detach v0.1.1
 ```
 

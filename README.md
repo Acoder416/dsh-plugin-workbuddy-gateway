@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.1.3。** 安装建议固定到 Git 标签 `v0.1.3`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.1.4。** 安装建议固定到 Git 标签 `v0.1.4`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.4"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.1.3 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.1.4 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -151,7 +151,7 @@ dsh --profile web
 
 ### 多账号行为
 
-没有会话绑定时，网关轮询同一区域的可用账号；同一会话优先复用已绑定账号。上游连接阶段遇到 `401`、`403`、`429`、`502`、`503`、`504` 或网络异常时，会将失败账号暂时冷却并尝试其他账号。一次请求中每个候选账号最多尝试一次；没有其他可用账号或同一区域全部失败时仍返回错误。其他 HTTP 错误、流式响应开始后的失败不保证切换；不会用国际版账号代替国内版账号。
+没有会话绑定时，网关轮询同一区域的可用账号；同一会话优先复用已绑定账号。上游连接阶段遇到 `401`、`403`、`429` 或网络异常时，会将失败账号暂时冷却并尝试其他账号。`502`、`503`、`504` 也会尝试其他账号，但不将账号置入冷却，避免上游暂时故障导致整个账号池不可用。一次请求中每个候选账号最多尝试一次；没有其他可用账号或同一区域全部失败时仍返回错误。其他 HTTP 错误、流式响应开始后的失败不保证切换；不会用国际版账号代替国内版账号。
 
 WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出桌面端不保证这些凭证立即失效。
 
@@ -174,7 +174,7 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 
 ```sh
 # 升级到本版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.4"
 
 # 回退到已有旧版标签
 dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1.1"
@@ -185,7 +185,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.1
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.1.3
+git switch --detach v0.1.4
 # 回退时改为：git switch --detach v0.1.1
 ```
 
