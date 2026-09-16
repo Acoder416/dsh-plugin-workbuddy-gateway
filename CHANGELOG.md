@@ -6,6 +6,10 @@
 - Apply confirmed settings immediately and discard background reads started before a settings write. Display the gateway and model catalog realms separately.
 - Rebuild the settings page on the Jet Hub style system (`iJetLi/deepseek-harness-codearts`): one injected stylesheet and `dsw-wb-*` classes over the theme's `--dsw-alias-*` tokens, replacing the per-element inline `style` objects. Adds a brand header, rounded cards with hover feedback, a status badge, account cards, and a per-section toolbar.
 - Harden the settings page against a malformed `/state` reading: a gateway state outside `running` / `starting` / `stopped` / `failed` now renders as stopped instead of emitting a `data-tone` no stylesheet matches. Render-phase failures have no error boundary, so this class of bug blanks the whole settings panel.
+- Fix realm switching never taking effect. The host half cached the settings thunk's *value* inside `setSource`, which `installSection` calls only when the settings provider attaches or detaches; a committed change afterwards fires `onChange` alone. The section therefore stayed frozen on the realm it mounted with — the picker never echoed a switch, the account and model reads kept querying the old realm, and the CN-only controls never appeared. The thunk is now re-read on attach, on every committed change, and immediately after a write.
+- Report credits to the cent, preferring the upstream's `*Precise` fields (measured on a real account: 2415 reported as 2415.78) and rounding the sum. Expired packages are now summed separately instead of into the usable balance, which they inflated.
+- Distinguish the bulk credit refresh from the per-account one; both previously carried the same label side by side, so refreshing one account looked like refreshing all of them.
+- Show a claim badge on CN account cards, with the confirmation time in its tooltip.
 
 ## 0.1.4 — 2026-09-16
 

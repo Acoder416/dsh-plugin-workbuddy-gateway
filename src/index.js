@@ -70,8 +70,25 @@ export function apply(ctx, config) {
     : join(homedir(), '.dsh')
   const stateDir = join(dshHome, 'workbuddy')
 
-  /** Current resolved settings; replaced whenever the section commits. */
-  let current = normalizeSettings({ ...SETTINGS_BASE, ...config })
+  /**
+   * The authoritative settings thunk.
+   *
+   * `installSection` hands `setSource` a thunk and calls it only when the
+   * settings provider attaches or detaches; a committed change afterwards fires
+   * `onChange` alone. Caching the thunk's *value* therefore froze the section at
+   * mount time: the realm picker never echoed a switch, the account and model
+   * reads kept querying the old realm, and the CN-only buttons never appeared.
+   */
+  let readSettings = () => ({ ...SETTINGS_BASE, ...config })
+
+  /** Current resolved settings; re-derived on attach and on every committed change. */
+  let current = normalizeSettings(readSettings())
+
+  /** Re-derive {@link current} from the authoritative thunk. */
+  const syncCurrent = () => {
+    current = normalizeSettings(readSettings())
+    return current
+  }
 
   /**
    * Resolve the gateway script to run.
@@ -205,9 +222,11 @@ export function apply(ctx, config) {
       { ...SETTINGS_BASE, ...config },
       {
         setSource: (source) => {
-          current = normalizeSettings(source())
+          readSettings = source
+          syncCurrent()
         },
         onChange: () => {
+          syncCurrent()
           // Routes are derived from the port, so a port change must not leave a
           // stale baseURL behind in settings.yaml.
           if (!current.providerSync) return
@@ -231,6 +250,11 @@ export function apply(ctx, config) {
         // namespace is already registered by `installSection`, so registering
         // again here would throw.
         await webCtx.settings.update(SETTINGS_NAMESPACE, patch)
+        // Re-derive before this request's own snapshot runs. The scope watcher
+        // that also does it is not ordered against this await, and a realm switch
+        // that still read the old realm would answer with the previous region's
+        // accounts and models.
+        syncCurrent()
       },
       credentials: () => webCtx.get('credentials'),
       syncProvider,

@@ -73,6 +73,55 @@ class AccountTests(unittest.TestCase):
                 self.assertEqual(imported.public()['credits']['remain'], 100)
                 self.assertEqual(imported.public()['checkinClaimed'], True if realm == 'cn' else None)
 
+    def test_credits_prefer_precise_values_and_round_to_cents(self):
+        account = accounts.Account({'uid': 'test', 'realm': 'intl', 'accessToken': 'fake'})
+        upstream = {'data': {'Response': {'Data': {'Accounts': [
+            {'PackageName': 'Bonus Pack', 'CycleCapacitySize': 250, 'CycleCapacityRemain': 247,
+             'CycleCapacitySizePrecise': '250.00', 'CycleCapacityRemainPrecise': '247.87',
+             'CycleCapacityUsedPrecise': '2.13', 'Status': 0},
+        ]}}}}
+        with patch.object(accounts.Account, 'headers', return_value={}), \
+                patch.object(accounts, 'http_json', return_value=upstream):
+            credits = account.fetch_credits()['credits']
+        # The truncated integer would report 247; the desktop app shows 247.87.
+        self.assertEqual(credits['remain'], 247.87)
+        self.assertEqual(credits['packages'][0]['remain'], 247.87)
+        self.assertEqual(credits['size'], 250.0)
+
+    def test_expired_packages_are_excluded_from_the_usable_balance(self):
+        account = accounts.Account({'uid': 'test', 'realm': 'intl', 'accessToken': 'fake'})
+        upstream = {'data': {'Response': {'Data': {'Accounts': [
+            {'PackageName': 'Active', 'CycleCapacitySizePrecise': '100.00',
+             'CycleCapacityRemainPrecise': '55.67', 'Status': 0},
+            {'PackageName': 'Expired', 'CycleCapacitySizePrecise': '500.00',
+             'CycleCapacityRemainPrecise': '500.00', 'Status': 3},
+        ]}}}}
+        with patch.object(accounts.Account, 'headers', return_value={}), \
+                patch.object(accounts, 'http_json', return_value=upstream):
+            credits = account.fetch_credits()['credits']
+        # Counting the expired package in would report 555.67.
+        self.assertEqual(credits['remain'], 55.67)
+        self.assertEqual(credits['expired'], 500.0)
+        self.assertFalse(credits['packages'][1]['active'])
+        self.assertTrue(credits['packages'][0]['active'])
+
+    def test_precise_number_falls_back_and_ignores_booleans(self):
+        self.assertEqual(accounts._precise_number({'CapacityRemain': 247}, 'CapacityRemain'), 247.0)
+        self.assertEqual(accounts._precise_number(
+            {'CapacityRemainPrecise': '247.87', 'CapacityRemain': 247}, 'CapacityRemain'), 247.87)
+        self.assertEqual(accounts._precise_number({'CapacityRemainPrecise': 'n/a'}, 'CapacityRemain'), 0.0)
+        self.assertEqual(accounts._precise_number({}, 'CapacityRemain'), 0.0)
+
+    def test_package_name_fallback_chain(self):
+        self.assertEqual(accounts._package_name({'PackageName': 'Named'}), 'Named')
+        self.assertEqual(accounts._package_name({'SubProductName': 'Sub'}), 'Sub')
+        self.assertEqual(accounts._package_name({'PackageCode': 'p_tcaca'}), 'p_tcaca')
+        self.assertEqual(accounts._package_name({'PackageName': '   '}), 'Package')
+        self.assertEqual(accounts._package_name({}), 'Package')
+        # Float noise from summing precise strings must not survive to the wire.
+        self.assertEqual(accounts.round_credits(655.67000031), 655.67)
+        self.assertEqual(accounts.round_credits(247), 247.0)
+
     def test_platform_directories(self):
         for platform, os_name, expected in [
             ('win32', 'nt', os.path.join('local-data', 'CodeBuddyExtension', 'Data', 'Public', 'auth')),

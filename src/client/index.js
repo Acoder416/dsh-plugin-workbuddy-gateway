@@ -95,7 +95,10 @@ window.__ModuleLoader__.load({
         expires: (text) => `${text} 后过期`,
         disabled: '已停用',
         scan: '扫描桌面端账号',
-        refreshCredits: '刷新积分',
+        // 工具栏按钮作用于全部账号，账号卡片按钮只作用于自己；两者文案必须能
+        // 区分，否则并排出现时点错按钮会被误当成「单个刷新变成了全部刷新」。
+        refreshAllCredits: '刷新全部积分',
+        refreshAccountCredits: '刷新积分',
         claimCredits: '领取积分',
         checkin: '签到',
         checkedIn: (time) => `已签到${time ? ` · ${time}` : ''}`,
@@ -205,7 +208,8 @@ window.__ModuleLoader__.load({
         expires: (text) => `expires in ${text}`,
         disabled: 'disabled',
         scan: 'Scan desktop accounts',
-        refreshCredits: 'Refresh credits',
+        refreshAllCredits: 'Refresh all credits',
+        refreshAccountCredits: 'Refresh credits',
         claimCredits: 'Claim credits',
         checkin: 'Check in',
         checkedIn: (time) => `Checked in${time ? ` · ${time}` : ''}`,
@@ -474,6 +478,18 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsw-wb-metaRow' },
         h('dt', null, label),
         h('dd', { className: 'dsw-wb-mono', title: title ?? String(value ?? '') }, String(value ?? '—')))
+    }
+
+    /**
+     * 国内版账号当日积分是否已领取。
+     *
+     * 网关保存的是最近一次确认的结果：`checkinClaimed` 为 true 表示已领取，
+     * 未确认过时回退到最近一次领取时间。国际版后端没有签到接口，两个字段恒为
+     * null，因此这里也恒为 false——调用方只在 `realm === 'cn'` 时展示它。
+     */
+    function checkinClaimedOf(entry) {
+      if (entry?.checkinClaimed === true) return true
+      return entry?.checkinClaimed === undefined && Boolean(entry?.lastCheckin)
     }
 
     /**
@@ -762,7 +778,7 @@ window.__ModuleLoader__.load({
               setMessage({ kind: 'ok', text: t.loginStarted })
             }), undefined)),
           h('div', { className: 'dsw-wb-toolbar' },
-            action(t.refreshCredits, () => void run('credits', () => postJson('/accounts/credits'), undefined), undefined),
+            action(t.refreshAllCredits, () => void run('credits', () => postJson('/accounts/credits'), undefined), undefined),
             settings.realm === 'cn'
               ? action(t.claimCredits, () => void run('tasks', () => postJson('/tasks/run'), t.taskClaimed), undefined)
               : null,
@@ -806,12 +822,18 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'dsw-wb-accountTop' },
                   h('span', { className: 'dsw-wb-dot', 'data-on': entry.enabled === false ? 'false' : 'true' }),
                   h('span', { className: 'dsw-wb-accountName' }, entry.nickname ?? entry.uid),
+                  // 签到状态只对国内版有意义，国际版后端没有这个接口。
+                  entry.realm === 'cn'
+                    ? h('span', {
+                        className: 'dsw-wb-tag',
+                        'data-tone': checkinClaimedOf(entry) ? 'on' : 'off',
+                        title: entry.lastCheckin ? String(entry.lastCheckin) : '',
+                      }, checkinClaimedOf(entry) ? t.checkedIn('') : t.notCheckedIn)
+                    : null,
                   entry.enabled === false ? h('span', { className: 'dsw-wb-tag', 'data-tone': 'off' }, t.disabled) : null),
                 h('p', { className: 'dsw-wb-note' },
                   [entry.realmName ?? entry.realm, entry.expiresIn === undefined ? null : t.expires(entry.expiresIn),
-                    entry.credits?.remain === undefined ? null : t.creditBalance(entry.credits.remain),
-                    entry.realm === 'cn' ? (entry.checkinClaimed === true || (entry.checkinClaimed === undefined && entry.lastCheckin)
-                      ? t.checkedIn(entry.lastCheckin) : t.notCheckedIn) : null]
+                    entry.credits?.remain === undefined ? null : t.creditBalance(entry.credits.remain)]
                     .filter(Boolean).join(' · ')),
                 confirmUid === entry.uid
                   ? h('div', { className: 'dsw-wb-actions' },
@@ -826,7 +848,7 @@ window.__ModuleLoader__.load({
                       }, t.confirmRemove),
                       h('button', { className: 'dsw-wb-btn', onClick: () => setConfirmUid(null) }, t.cancel))
                   : h('div', { className: 'dsw-wb-actions' },
-                      action(t.refreshCredits, () => void run(`credits-${entry.uid}`, () => postJson('/accounts/credits', { uid: entry.uid }), undefined), undefined),
+                      action(t.refreshAccountCredits, () => void run(`credits-${entry.uid}`, () => postJson('/accounts/credits', { uid: entry.uid }), undefined), undefined),
                       entry.realm === 'cn'
                         ? action(t.checkin, () => void run(`checkin-${entry.uid}`, () => postJson('/accounts/checkin', { uid: entry.uid }), t.saved), undefined)
                         : null,

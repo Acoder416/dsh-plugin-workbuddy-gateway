@@ -55,7 +55,8 @@ test('account controls and realm selector stay inside the account card even with
     assert.ok(card)
     assert.equal(elements(card).filter((node) => node.type === 'select').length, 1)
     const text = visibleText(card)
-    assert.match(text, /Refresh credits/)
+    // 工具栏按钮作用于全部账号，文案必须与账号卡片上的区分开。
+    assert.match(text, /Refresh all credits/)
     assert.match(text, /Disable all/)
     assert.match(text, accounts.length === 0 ? /No accounts yet/ : /Sample/)
     assert.ok(tree.children.some((node) => node?.props?.key === 'providerCard'))
@@ -65,7 +66,11 @@ test('account controls and realm selector stay inside the account card even with
 test('account card displays confirmed claim status and localized credits', () => {
   const tree = render([{ uid: 'sample', realm: 'cn', enabled: true,
     checkinClaimed: true, lastCheckin: '2026-09-16 12:00:00', credits: { remain: 100 } }])
-  assert.match(visibleText(tree), /Checked in.*2026-09-16 12:00:00/)
+  // 签到状态现在是账号卡片上的标签，确认时间放在标签的 title 里。
+  assert.match(visibleText(tree), /Checked in/)
+  const claimTag = elements(tree).find((node) => node?.props?.title === '2026-09-16 12:00:00')
+  assert.ok(claimTag, 'the check-in tag carries the confirmation time')
+  assert.equal(visibleText(claimTag), 'Checked in')
   assert.match(visibleText(tree), /100 credits/)
   const buttons = elements(tree).filter((node) => node.type === 'button').map(visibleText)
   assert.ok(buttons.includes('Disable'))

@@ -1,5 +1,6 @@
 import base64
 import json
+import math
 import os
 import ssl
 import sys
@@ -88,6 +89,10 @@ REFRESH_PATH = "/v2/plugin/auth/token/refresh"
 CHECKIN_PATH = "/v2/billing/meter/daily-checkin"
 GET_RESOURCE_PATH = "/v2/billing/meter/get-user-resource"
 
+# The upstream marks an expired resource package with Status 3. Any other value
+# stays usable.
+PACKAGE_STATUS_EXPIRED = 3
+
 LOGIN_PENDING = 11217
 LOGIN_TTL_SECONDS = 600
 USER_AGENT = REALM_CONFIGS['intl']['chat_ua']
@@ -110,6 +115,77 @@ def _checkin_claimed(payload):
             if found is not None:
                 return found
     return None
+
+def _precise_number(source, base_key):
+    """Read one numeric field, preferring the ``*Precise`` variant.
+
+    The upstream truncates the plain keys to integers (``CapacityRemain`` = 247)
+    while the ``Precise`` keys carry the two-decimal figure the desktop app shows
+    (``"247.87"``, as a string). Prefer the precise value and fall back to the
+    integer so an older response shape still yields a number.
+    """
+    precise = source.get(base_key + "Precise")
+    if isinstance(precise, str):
+        try:
+            return float(precise)
+        except ValueError:
+            pass
+    elif isinstance(precise, (int, float)) and not isinstance(precise, bool):
+        return float(precise)
+    value = source.get(base_key)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+def _package_name(entry):
+    """Package name fallback chain: ``PackageName`` -> ``SubProductName`` -> ``PackageCode``.
+
+    Enterprise and other variants may ship only one of the three, so falling
+    through beats rendering an empty label.
+    """
+    for key in ("PackageName", "SubProductName", "PackageCode"):
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "Package"
+
+
+def _package_is_active(entry):
+    """Whether a resource package may still be charged against.
+
+    An expired package's credits are still returned by the upstream, so summing
+    them inflates the balance (measured on a real account: 155.67 reported as
+    655.67). Only explicit expiry counts: an unknown Status or an unparseable
+    timestamp stays usable, because hiding spendable credits is the worse error.
+    """
+    if entry.get("Status") == PACKAGE_STATUS_EXPIRED:
+        return False
+    expired = entry.get("ExpiredTime")
+    if isinstance(expired, str) and expired.strip():
+        try:
+            when = time.mktime(time.strptime(expired.strip(), "%Y-%m-%d %H:%M:%S"))
+        except ValueError:
+            return True
+        if time.time() >= when:
+            return False
+    return True
+
+
+def round_credits(value):
+    """Round a credit amount to cents.
+
+    Uses floor-plus-half rather than :func:`round`, whose banker's rounding would
+    send a value landing exactly on half a cent the other way. Amounts are
+    non-negative here, so the floor form is exact enough.
+    """
+    return math.floor(float(value) * 100 + 0.5) / 100
+
 
 def _jwt_claims(token):
     try:
@@ -380,29 +456,43 @@ class Account(object):
             return {"ok": False, "error": str(exc)}
         data = res.get("data", {}).get("Response", {}).get("Data", {})
         accounts = data.get("Accounts") or []
-        tot_remain, tot_used, tot_size = 0, 0, 0
+        tot_remain, tot_used, tot_size, tot_expired = 0.0, 0.0, 0.0, 0.0
         packages = []
         for a in accounts:
-            pkg_name = a.get("PackageName") or "Package"
-            if a.get("CycleCapacitySize", 0) > 0:
-                remain = a.get("CycleCapacityRemain", 0)
-                size = a.get("CycleCapacitySize", 0)
-                used = max(0, size - remain)
-                if a.get("CycleCapacityUsed", 0) > used:
-                    used = a["CycleCapacityUsed"]
-                    remain = max(0, size - used)
+            pkg_name = _package_name(a)
+            if _precise_number(a, "CycleCapacitySize") > 0:
+                remain = _precise_number(a, "CycleCapacityRemain")
+                size = _precise_number(a, "CycleCapacitySize")
+                used = max(0.0, size - remain)
+                cycle_used = _precise_number(a, "CycleCapacityUsed")
+                if cycle_used > used:
+                    used = cycle_used
+                    remain = max(0.0, size - used)
             else:
-                remain = a.get("CapacityRemain", 0)
-                used = a.get("CapacityUsed", 0)
-                size = a.get("CapacitySize", 0)
-            tot_remain += remain
-            tot_used += used
-            tot_size += size
-            packages.append({"name": pkg_name, "remain": remain, "used": used, "size": size})
+                remain = _precise_number(a, "CapacityRemain")
+                used = _precise_number(a, "CapacityUsed")
+                size = _precise_number(a, "CapacitySize")
+            # Expired packages still report their credits but cannot be spent, so
+            # they are summed separately instead of into the usable balance.
+            active = _package_is_active(a)
+            if active:
+                tot_remain += remain
+                tot_used += used
+                tot_size += size
+            else:
+                tot_expired += remain
+            packages.append({
+                "name": pkg_name,
+                "remain": round_credits(remain),
+                "used": round_credits(used),
+                "size": round_credits(size),
+                "active": active,
+            })
         self.credits = {
-            "remain": tot_remain,
-            "used": tot_used,
-            "size": tot_size,
+            "remain": round_credits(tot_remain),
+            "used": round_credits(tot_used),
+            "size": round_credits(tot_size),
+            "expired": round_credits(tot_expired),
             "packages": packages,
             "updated_at": time.time(),
             "updated_iso": time.strftime("%Y-%m-%d %H:%M:%S"),
