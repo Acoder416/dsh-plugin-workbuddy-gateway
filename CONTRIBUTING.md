@@ -95,6 +95,29 @@ That is what the `integration` CI job exists to detect, and why its DSH revision
 is pinned in `.github/workflows/ci.yml` — bump `DSH_REF` deliberately, after
 running the integration scripts against the newer harness.
 
+## Versioning and releases
+
+Develop fixes on a branch, run the offline JavaScript and Python tests and the
+package check listed above, and merge the verified change into `main` before
+tagging a release. Run the integration scripts when changing harness integration.
+Record any unavailable checks in the release notes; do not describe them as passed.
+
+Use patch versions for fixes (`0.2.2` → `0.2.3`), minor versions for new features
+or larger changes (`0.2.x` → `0.3.0`), and prerelease tags such as `v0.3.0-rc.1`
+for release candidates. Update `package.json`, `PLUGIN_VERSION`, the health
+endpoint version, both READMEs, and `CHANGELOG.md` together.
+
+Create an annotated `vX.Y.Z` tag on the tested release commit in `main`, then
+create a GitHub Release for that existing tag. Include the changes, validation,
+fixed-tag installation command, previous-version rollback command, and any
+restart or data-migration requirements. Mark only the newest stable release as
+Latest. Check that the remote tag resolves to the intended commit.
+
+Published tags are immutable: never move, overwrite, or delete one to replace a
+release. Publish a new version for corrections. Installations should pin a release
+tag rather than `main`; rollback changes code, not account data or configuration,
+so preserve a private backup before upgrading.
+
 ## Reporting a bug
 
 Include:
