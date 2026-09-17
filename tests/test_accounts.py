@@ -122,6 +122,29 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(accounts.round_credits(655.67000031), 655.67)
         self.assertEqual(accounts.round_credits(247), 247.0)
 
+    def test_pick_shortest_cooldown_picks_the_account_closest_to_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pool = accounts.AccountPool(directory)
+            pool.accounts = [
+                accounts.Account({'uid': 'far', 'realm': 'intl', 'accessToken': 't'}),
+                accounts.Account({'uid': 'near', 'realm': 'intl', 'accessToken': 't'}),
+                accounts.Account({'uid': 'other-realm', 'realm': 'cn', 'accessToken': 't'}),
+                accounts.Account({'uid': 'no-token', 'realm': 'intl', 'accessToken': ''}),
+                accounts.Account({'uid': 'disabled', 'realm': 'intl', 'accessToken': 't', 'enabled': False}),
+            ]
+            with patch.object(accounts.time, 'time', return_value=1000):
+                pool.accounts[0].note_error('HTTP 429', cooldown=300)
+                pool.accounts[1].note_error('HTTP 429', cooldown=60)
+                pool.accounts[2].note_error('HTTP 429', cooldown=10)
+                # Assertions stay inside the patch: the cooldown deadlines are
+                # absolute timestamps, so they must be read at the same clock.
+                self.assertIsNone(pool.pick(realm='intl'))
+                self.assertEqual(pool.pick_shortest_cooldown(realm='intl').uid, 'near')
+                # Only enabled accounts holding a token are candidates, the realm
+                # filter still applies, and already-tried accounts stay excluded.
+                self.assertEqual(pool.pick_shortest_cooldown(realm='cn').uid, 'other-realm')
+                self.assertIsNone(pool.pick_shortest_cooldown(realm='intl', exclude={'near', 'far'}))
+
     def test_platform_directories(self):
         for platform, os_name, expected in [
             ('win32', 'nt', os.path.join('local-data', 'CodeBuddyExtension', 'Data', 'Public', 'auth')),

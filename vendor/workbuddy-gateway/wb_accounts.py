@@ -662,6 +662,29 @@ class AccountPool(object):
                 return account
         return None
 
+    def pick_shortest_cooldown(self, realm=None, exclude=None):
+        """The cooling account closest to being usable again, or None.
+
+        A last resort for when nothing is ready. A 429 usually clears within
+        seconds, so answering "no usable account" without trying anything turns a
+        brief upstream limit into a five-minute outage for the caller. Only
+        accounts that are enabled and hold a token are considered; the caller is
+        still bounded to one attempt per request, so this cannot stampede the
+        upstream.
+        """
+        exclude = exclude or set()
+        with self._lock:
+            candidates = [
+                account for account in self.accounts
+                if (not realm or account.realm == realm)
+                and account.uid not in exclude
+                and account.enabled
+                and account.access_token
+            ]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda account: account.cooldown_until)
+
     def representative(self, realm=None):
         with self._lock:
             candidates = [a for a in self.accounts if not realm or a.realm == realm]

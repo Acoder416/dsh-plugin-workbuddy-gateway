@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — 2026-09-17
+
+- Stop a single rate-limited request from locking the whole account pool out for five minutes. A 429 cooled the account it touched for 300 seconds, and the failover path tries every candidate within one request, so three accounts answering 429 once each put the entire pool in cooldown — after which every request failed in about 20 ms with `no usable account for realm 'intl'` until the cooldowns lapsed. When *every* candidate answers 429, the limit is pool-wide (the accounts share one egress, so rotating did not help) and the cooldown is now 30 seconds.
+- Give a fully cooled pool one attempt instead of refusing outright: the account closest to recovery is tried once per request, so a limit that clears in seconds no longer reads as a hard failure. The per-request attempt bound is unchanged, so this cannot stampede the upstream.
+
 ## 0.2.0 — 2026-09-17
 
 - Restore realm switching fixes omitted from v0.1.4: confirm the gateway realm before saving, read models for the selected realm, and update automatic provider routes.

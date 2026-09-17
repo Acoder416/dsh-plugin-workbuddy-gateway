@@ -1430,10 +1430,18 @@ def open_upstream(payload, session_key=None, target_realm=None):
     total = max(1, POOL.count_ready(realm)) if POOL else 1
     tried = set()
     last_error = None
+    rejected_429 = []
     for _ in range(total):
         account = POOL.pick_for_session(realm=realm, session_key=session_key, exclude=tried) if POOL else None
         if account is None:
-            break
+            # Nothing is ready. Answering "no usable account" without contacting
+            # the upstream turns a limit that may clear in seconds into a hard
+            # failure, so give the account closest to cooling off one attempt. It
+            # is still one attempt per request, so this cannot stampede.
+            if not tried:
+                account = POOL.pick_shortest_cooldown(realm=realm, exclude=tried)
+            if account is None:
+                break
         if account.realm != realm:
             if session_key and POOL: POOL.affinity.unbind(session_key)
             continue
@@ -1457,6 +1465,8 @@ def open_upstream(payload, session_key=None, target_realm=None):
                     account.note_error("HTTP %s" % exc.code,
                                        cooldown=300 if exc.code == 429 else 60,
                                        single_account=(total <= 1))
+                    if exc.code == 429:
+                        rejected_429.append(account)
                 last_error = exc
                 continue
             raise
@@ -1466,6 +1476,14 @@ def open_upstream(payload, session_key=None, target_realm=None):
             account.note_error(str(exc)[:120], cooldown=60, single_account=(total <= 1))
             last_error = exc
             continue
+    # Every candidate answered 429. The accounts share one egress, so rotating
+    # did not help and the next caller hits the same wall: this is a pool-wide
+    # limit, not a per-account one. Locking the whole pool out for five minutes
+    # for a limit that may clear in seconds is the wrong trade.
+    if total > 1 and len(rejected_429) >= total:
+        for account in rejected_429:
+            account.note_error("HTTP 429 (every candidate)", cooldown=30)
+        log("all %d candidates answered 429; treating it as a pool-wide limit, cooling 30s instead of 300s" % total)
     if last_error is not None:
         raise last_error
     raise RuntimeError(f"no usable account for realm '{realm}': all are disabled, cooling down, or expired")

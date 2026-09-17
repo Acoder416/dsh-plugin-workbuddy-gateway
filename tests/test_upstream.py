@@ -109,6 +109,46 @@ class UpstreamTests(unittest.TestCase):
         self.assertEqual(call.call_count, 1)
         self.assertTrue(all(account.ready() for account in self.pool.accounts))
 
+    def test_a_pool_wide_429_cools_briefly_instead_of_five_minutes(self):
+        with patch.object(wb_accounts.time, 'time', return_value=10000):
+            with patch.object(wb_proxy.urllib.request, 'urlopen', side_effect=[upstream_error(429)] * 3) as call:
+                with self.assertRaises(HTTPError):
+                    wb_proxy.open_upstream(self.payload, target_realm='intl')
+            self.assertEqual(call.call_count, 3)
+            # The accounts share one egress, so every candidate answering 429 is a
+            # pool-wide limit, not three account-level ones. Locking the pool out
+            # for 300s would turn a limit that may clear in seconds into a
+            # five-minute outage.
+            self.assertFalse(any(account.ready() for account in self.pool.accounts[:3]))
+            with patch.object(wb_accounts.time, 'time', return_value=10031):
+                self.assertTrue(all(account.ready() for account in self.pool.accounts[:3]))
+            # The unrelated realm is never touched.
+            self.assertTrue(self.pool.accounts[3].ready())
+
+    def test_partial_429_keeps_the_full_cooldown(self):
+        # One account rate limited and another succeeding is an account-level
+        # limit; the rejected account must still sit out the long cooldown.
+        success = io.BytesIO(b'data: [DONE]\n\n')
+        with patch.object(wb_accounts.time, 'time', return_value=10000):
+            with patch.object(wb_proxy.urllib.request, 'urlopen', side_effect=[upstream_error(429), success]):
+                wb_proxy.open_upstream(self.payload, target_realm='intl')
+            with patch.object(wb_accounts.time, 'time', return_value=10031):
+                self.assertFalse(self.pool.accounts[0].ready())
+            with patch.object(wb_accounts.time, 'time', return_value=10301):
+                self.assertTrue(self.pool.accounts[0].ready())
+
+    def test_a_fully_cooled_pool_still_gets_one_attempt(self):
+        for account in self.pool.accounts:
+            account.note_error('HTTP 429', cooldown=300)
+        success = io.BytesIO(b'data: [DONE]\n\n')
+        with patch.object(wb_proxy.urllib.request, 'urlopen', return_value=success) as call:
+            response, account = wb_proxy.open_upstream(self.payload, target_realm='intl')
+        self.assertIs(response, success)
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(account.realm, 'intl')
+        # A successful attempt clears the cooling account it was granted to.
+        self.assertTrue(account.ready())
+
     def test_successful_connection_does_not_read_or_replay_stream(self):
         response = io.BytesIO(b'data: hello\n\n')
         with patch.object(wb_proxy.urllib.request, 'urlopen', return_value=response) as call:
