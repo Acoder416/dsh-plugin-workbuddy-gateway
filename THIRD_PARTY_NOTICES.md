@@ -34,6 +34,14 @@ account pool with simulated upstream responses and no live credentials.
 accounts; request-local attempt tracking bounds retries without blocking the
 caller's next request. Authentication and rate-limit cooldowns are preserved.
 
+**Modifications in 0.2.2.** `wb_accounts.py` stores per-account/model reset deadlines
+and serializes atomic saves. `wb_proxy.py` rotates on HTTP 429 or business code
+6004, skips restricted pairs until reset, and preserves error response bodies.
+The new local `wb_rate_limits.py` parses upstream reset timestamps and Retry-After,
+with a configurable fallback. This supersedes 0.2.1's pool-wide cooldown handling;
+affected models no longer impose account-wide cooldowns. Offline Python tests cover
+persistence, concurrent writes, model/realm isolation, and both HTTP protocols.
+
 A local `.npmignore` excludes Python bytecode and account state from npm packages.
 
 `tests/test_accounts.py` covers these changes with offline fixtures. Preserve or
@@ -79,9 +87,10 @@ SOFTWARE.
 
 ## Referenced, not redistributed
 
-The plugin's design borrows from two community DSH plugins. No code from them is
+The plugin's design references community DSH plugins. No code from them is
 included here; they were read for their integration patterns only.
 
+- [`iJetLi/deepseek-harness-codearts`](https://gitee.com/iJetLi/deepseek-harness-codearts) — per-account/model reset deadlines; the Python implementation is independently written.
 - `dsh-plugin-archived-sessions` — the `settings.section` slot registration.
 - `dsh-plugin-codex-monitor` — host route + client page shape, and the
   same-origin guard convention for mutating routes.

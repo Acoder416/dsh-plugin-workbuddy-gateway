@@ -122,28 +122,54 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(accounts.round_credits(655.67000031), 655.67)
         self.assertEqual(accounts.round_credits(247), 247.0)
 
-    def test_pick_shortest_cooldown_picks_the_account_closest_to_recovery(self):
-        with tempfile.TemporaryDirectory() as directory:
+    def test_model_limits_round_trip_without_disabling_other_models(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(accounts.time, 'time', return_value=1000):
+            account = accounts.Account({'uid': 'limited', 'realm': 'intl', 'accessToken': 't'})
+            account.save(directory)
+            account.note_model_rate_limit('model-a', 1300)
             pool = accounts.AccountPool(directory)
-            pool.accounts = [
-                accounts.Account({'uid': 'far', 'realm': 'intl', 'accessToken': 't'}),
-                accounts.Account({'uid': 'near', 'realm': 'intl', 'accessToken': 't'}),
-                accounts.Account({'uid': 'other-realm', 'realm': 'cn', 'accessToken': 't'}),
-                accounts.Account({'uid': 'no-token', 'realm': 'intl', 'accessToken': ''}),
-                accounts.Account({'uid': 'disabled', 'realm': 'intl', 'accessToken': 't', 'enabled': False}),
-            ]
-            with patch.object(accounts.time, 'time', return_value=1000):
-                pool.accounts[0].note_error('HTTP 429', cooldown=300)
-                pool.accounts[1].note_error('HTTP 429', cooldown=60)
-                pool.accounts[2].note_error('HTTP 429', cooldown=10)
-                # Assertions stay inside the patch: the cooldown deadlines are
-                # absolute timestamps, so they must be read at the same clock.
-                self.assertIsNone(pool.pick(realm='intl'))
-                self.assertEqual(pool.pick_shortest_cooldown(realm='intl').uid, 'near')
-                # Only enabled accounts holding a token are candidates, the realm
-                # filter still applies, and already-tried accounts stay excluded.
-                self.assertEqual(pool.pick_shortest_cooldown(realm='cn').uid, 'other-realm')
-                self.assertIsNone(pool.pick_shortest_cooldown(realm='intl', exclude={'near', 'far'}))
+            pool.load()
+            restored = pool.get('limited')
+            self.assertTrue(restored.ready())
+            self.assertFalse(restored.ready_for_model('model-a'))
+            self.assertTrue(restored.ready_for_model('model-b'))
+            self.assertEqual(restored.public()['modelRateLimits'], {'model-a': 1300})
+            pool.set_enabled('limited', False)
+            pool.set_enabled('limited', True)
+            self.assertFalse(restored.ready_for_model('model-a'))
+            pool.add(accounts.Account({'uid': 'limited', 'realm': 'intl', 'accessToken': 'renewed'}))
+            self.assertFalse(pool.get('limited').ready_for_model('model-a'))
+            self.assertEqual(pool.next_model_reset('intl', 'model-a'), 1300)
+            self.assertIsNone(pool.next_model_reset('cn', 'model-a'))
+            self.assertIsNone(pool.pick_for_session('intl', 'chat', model='model-a'))
+            self.assertEqual(pool.pick_for_session('intl', 'chat', model='model-b').uid, 'limited')
+
+    def test_concurrent_model_limits_persist_and_shorter_deadlines_cannot_erase_longer_ones(self):
+        from concurrent.futures import ThreadPoolExecutor
+        with tempfile.TemporaryDirectory() as directory, patch.object(accounts.time, 'time', return_value=1000):
+            account = accounts.Account({'uid': 'a', 'accessToken': 't'})
+            account.save(directory)
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                list(executor.map(lambda i: account.note_model_rate_limit('m' + str(i), 2000 + i), range(20)))
+            account.note_model_rate_limit('m0', 1500)
+            account.clear_model_rate_limit('m0')
+            restored = json.loads(Path(account.path).read_text(encoding='utf-8'))
+            self.assertEqual(restored['modelRateLimits'], {'m' + str(i): 2000 + i for i in range(20)})
+            self.assertNotIn('accessToken', account.public())
+
+    def test_status_count_does_not_refresh_credentials(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(accounts.time, 'time', return_value=1000):
+            pool = accounts.AccountPool(directory)
+            pool.accounts = [accounts.Account({'uid': 'a', 'accessToken': 't', 'expiresAt': 900,
+                                               'modelRateLimits': {'model-a': 1300}})]
+            with patch.object(accounts.Account, 'refresh', side_effect=AssertionError('unexpected refresh')):
+                self.assertEqual(pool.count_ready('intl'), 1)
+                self.assertEqual(pool.count_ready('intl', 'model-a'), 0)
+
+    def test_malformed_persisted_limits_do_not_block_accounts_forever(self):
+        account = accounts.Account({'accessToken': 't', 'modelRateLimits':
+            {'bool': True, 'inf': float('inf'), 'nan': float('nan'), 'text': 'later', 'negative': -1}})
+        self.assertEqual(account.public()['modelRateLimits'], {})
 
     def test_platform_directories(self):
         for platform, os_name, expected in [

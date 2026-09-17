@@ -4,7 +4,7 @@ Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model rout
 
 [中文](README.md) | English
 
-**Version: 0.2.1.** Install from the fixed Git tag `v0.2.1`; `v0.2.0` remains available for rollback. No plugin market is required.
+**Version: 0.2.2.** Install from the fixed Git tag `v0.2.2`; `v0.2.1` remains available for rollback. No plugin market is required.
 
 This is an unofficial integration using WorkBuddy subscription endpoints and DSH internal APIs. Those interfaces can change, and using them may violate service terms or trigger account restrictions.
 
@@ -24,7 +24,7 @@ Python detection tries `python`, then `python3` on Windows, and the reverse orde
 Use an existing, initialized web profile:
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
 ```
 
 Then append `dsh-plugin-workbuddy-gateway` to the existing `dsh.profile.bundles` array in the profile's `package.json`. Preserve its other entries. The default profile directory is `~/.dsh/profiles/web`, or `$DSH_HOME/profiles/web` when configured.
@@ -50,7 +50,7 @@ Restart **DSH itself**, then refresh the browser. Restarting only the Python gat
 Keep the checkout in a permanent directory:
 
 ```sh
-git clone --branch v0.2.1 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.2 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -105,7 +105,13 @@ Refreshing credits queries the upstream live, once per account, and retries befo
 
 **Claim credits** invokes the bundled gateway's growth-task workflow, separate from daily check-in. It depends on upstream activity endpoints and does not guarantee rewards.
 
-Without a session binding, the gateway rotates across available accounts in the same realm. Bound sessions prefer their existing account. During connection setup, HTTP 401/403/429 and network exceptions trigger cooldown and another account attempt. HTTP 502/503/504 also try another account but do not apply account cooldown, so a temporary upstream outage does not block the entire pool on the next request. Each candidate is tried at most once per request. With no alternative or all accounts failing, the error is still returned. Other HTTP errors and failures after streaming starts do not guarantee failover. Accounts do not cross realms.
+Without a session binding, the gateway rotates across available accounts in the same realm. Bound sessions prefer their existing account. HTTP 429 or upstream business code 6004 records a restriction for that account and model, then tries another eligible account in the same realm. Other models remain eligible. Reaching the deadline permits another attempt; it does not guarantee upstream acceptance. A positive credit balance does not rule out a model frequency limit.
+
+The reset deadline comes from the upstream message's date and UTC offset, then from `Retry-After`. Without either, the fallback is 300 seconds. Set `WB_RATE_LIMIT_FALLBACK_SECONDS` to a positive number of seconds before launching DSH and restart DSH after changing it. Standalone gateways also accept `--rate-limit-fallback-seconds`. Restrictions persist in account files across restarts, reimports, and enable/disable toggles. Account cards show restricted models and estimated reset times. The usable account count does not establish availability for every model.
+
+When model restrictions block all otherwise eligible accounts in the realm, subsequent requests return HTTP 429 with the earliest `resetAt` (Unix seconds) in the error message, without contacting upstream before that deadline. Multiple accounts returning 429 does not establish a shared IP limit; each account retains its own deadline.
+
+During connection setup, HTTP 401/403 and network exceptions retain existing account error handling and try another account. HTTP 502/503/504 also try another account without applying account cooldown. Each candidate is tried at most once per request. With no alternative or all accounts failing, the error is still returned. Other HTTP errors and failures after streaming starts do not guarantee failover. Accounts do not cross realms.
 
 The desktop app does not need to stay open after import. Logging out of it does not necessarily revoke the gateway's saved tokens.
 
@@ -130,7 +136,7 @@ On PowerShell, use `$env:WORKBUDDY_DESKTOP_AUTH_DIR = 'D:\path\to\auth'` before 
 
 ## Storage and security
 
-Account files under `$DSH_HOME/workbuddy/accounts/` contain access and refresh tokens, credits, and check-in records. Usage records live under `$DSH_HOME/workbuddy/usage/`. The default home is `~/.dsh`.
+Account files under `$DSH_HOME/workbuddy/accounts/` contain access and refresh tokens, credits, check-in records, and model rate-limit deadlines. Usage records live under `$DSH_HOME/workbuddy/usage/`. The default home is `~/.dsh`.
 
 The gateway API key is stored in DSH's credential store as `WORKBUDDY_API_KEY`. Keep account files private, keep the listener local, and retain API authentication. Removing or disabling an account stops this gateway from selecting it; it does not revoke credentials at the provider.
 
@@ -140,9 +146,9 @@ Stop DSH and back up the profile configuration, lockfile, and WorkBuddy state be
 
 ```sh
 # Upgrade
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
 # Roll back
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.0"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
 ```
 
 For a linked checkout:
@@ -150,8 +156,8 @@ For a linked checkout:
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.1
-# To roll back: git switch --detach v0.2.0
+git switch --detach v0.2.2
+# To roll back: git switch --detach v0.2.1
 ```
 
 Preserve local changes before switching. Restart DSH and refresh the browser afterward. A linked installation follows that directory, not another checkout. Code rollback does not undo reward claims, account changes, or model-route writes. Restore your own configuration backup if needed. See [CHANGELOG.md](CHANGELOG.md).

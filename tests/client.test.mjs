@@ -76,3 +76,12 @@ test('account card displays confirmed claim status and localized credits', () =>
   assert.ok(buttons.includes('Disable'))
   assert.ok(buttons.includes('Disable all'))
 })
+
+
+test('account model limits show model names and hide expired deadlines', () => {
+  const text = visibleText(render([{ uid: 'limited', realm: 'intl', enabled: true,
+    modelRateLimits: { 'limited-model': Date.now() / 1000 + 3600, 'expired-model': 1 } }]))
+  assert.match(text, /limited-model rate limited until/)
+  assert.doesNotMatch(text, /expired-model/)
+  assert.match(text, /model restrictions and reset times/)
+})

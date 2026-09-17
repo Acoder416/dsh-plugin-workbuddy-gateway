@@ -90,6 +90,8 @@ window.__ModuleLoader__.load({
         activeRealm: '网关当前区域',
         modelsRealm: '模型清单所属区域',
         realmUnknown: '未确认',
+        modelLimited: (model, time) => `${model} 限流至 ${time}（预计）`,
+        limitsNote: '可用数量表示账号基础状态；模型限制请看各账号下方的恢复时间。',
         realmStopped: '网关未运行',
         realmManual: '自动维护已关闭；请点击「写入模型路由」更新 DSH 模型选项。',
         expires: (text) => `${text} 后过期`,
@@ -203,6 +205,8 @@ window.__ModuleLoader__.load({
         activeRealm: 'Active gateway realm',
         modelsRealm: 'Model catalog realm',
         realmUnknown: 'Not confirmed',
+        modelLimited: (model, time) => `${model} rate limited until ${time} (estimated)`,
+        limitsNote: 'The count reflects account readiness; model restrictions and reset times appear below each account.',
         realmStopped: 'Gateway not running',
         realmManual: 'Automatic maintenance is off; sync the model route to update the DSH model picker.',
         expires: (text) => `expires in ${text}`,
@@ -835,6 +839,10 @@ window.__ModuleLoader__.load({
                   [entry.realmName ?? entry.realm, entry.expiresIn === undefined ? null : t.expires(entry.expiresIn),
                     entry.credits?.remain === undefined ? null : t.creditBalance(entry.credits.remain)]
                     .filter(Boolean).join(' · ')),
+                ...Object.entries(entry.modelRateLimits ?? {})
+                  .filter(([, resetAt]) => typeof resetAt === 'number' && Number.isFinite(resetAt) && resetAt * 1000 > Date.now())
+                  .map(([model, resetAt]) => h('p', { key: `limit-${model}`, className: 'dsw-wb-note' },
+                    t.modelLimited(model, new Date(resetAt * 1000).toLocaleString()))),
                 confirmUid === entry.uid
                   ? h('div', { className: 'dsw-wb-actions' },
                       h('button', {
@@ -856,6 +864,7 @@ window.__ModuleLoader__.load({
                         () => void run(`set-${entry.uid}`, () => postJson('/accounts/set', { uid: entry.uid, enabled: entry.enabled === false }), t.saved), undefined),
                       h('button', { className: 'dsw-wb-btn', disabled: busy !== null, onClick: () => setConfirmUid(entry.uid) }, t.remove))))),
 
+          h('p', { className: 'dsw-wb-note' }, t.limitsNote),
           h('p', { className: 'dsw-wb-note' }, t.accountScopeNote),
           h('p', { className: 'dsw-wb-note' }, t.scanNote),
 

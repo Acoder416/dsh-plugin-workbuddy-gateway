@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.2.1。** 安装建议固定到 Git 标签 `v0.2.1`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.2.2。** 安装建议固定到 Git 标签 `v0.2.2`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.2.1 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.2 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -155,7 +155,13 @@ dsh --profile web
 
 区域切换同时更新账号列表与模型清单；开启自动维护模型路由时，也更新 DSH 的模型选项。页面分别显示已选区域、网关当前区域和模型清单所属区域。关闭自动维护时，需要手动点击「写入模型路由」。网关未确认切换成功时不会保存新区域。
 
-没有会话绑定时，网关轮询同一区域的可用账号；同一会话优先复用已绑定账号。上游连接阶段遇到 `401`、`403`、`429` 或网络异常时，会将失败账号暂时冷却并尝试其他账号。`502`、`503`、`504` 也会尝试其他账号，但不将账号置入冷却，避免上游暂时故障导致整个账号池不可用。一次请求中每个候选账号最多尝试一次；没有其他可用账号或同一区域全部失败时仍返回错误。其他 HTTP 错误、流式响应开始后的失败不保证切换；不会用国际版账号代替国内版账号。
+没有会话绑定时，网关轮询同一区域的可用账号；同一会话优先复用已绑定账号。`429` 或上游业务码 `6004` 会记录该账号、该模型的限流恢复时间，并尝试同区其他可用账号；该账号的其他模型不受这条记录影响。到期只表示可以再次尝试，不保证上游一定接受请求；账号有积分也不代表该模型未触发频率限制。
+
+恢复时间优先读取上游消息中带 UTC 偏移的日期时间，其次使用 `Retry-After`；两者都不可用时，默认等待 300 秒。可在启动 DSH 前设置环境变量 `WB_RATE_LIMIT_FALLBACK_SECONDS` 为正数秒数，修改后重启 DSH。独立运行网关时也可使用 `--rate-limit-fallback-seconds`。限流记录保存在账号文件中，重启、重新导入或切换启用状态不会清除尚未到期的记录。账号卡片显示受限模型和预计恢复时间；账号可用数量不代表每个模型都可用。
+
+同区所有候选账号都被该模型的限流记录阻止时，后续请求直接返回 `429`，错误信息包含最早的 `resetAt`（Unix 秒），到期前不再请求上游。多个账号均返回 `429` 不能据此判断为共享 IP 限流；各账号的恢复时间分别保存。
+
+上游连接阶段遇到 `401`、`403` 或网络异常时，保留原有账号错误处理并尝试其他账号。`502`、`503`、`504` 也会尝试其他账号，但不将账号置入冷却。一次请求中每个候选账号最多尝试一次；没有其他可用账号或同一区域全部失败时仍返回错误。其他 HTTP 错误、流式响应开始后的失败不保证切换；账号不会跨区域使用。
 
 WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出桌面端不保证这些凭证立即失效。
 
@@ -163,7 +169,7 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 
 | 内容 | 保存位置 |
 |---|---|
-| 账号访问令牌、刷新令牌、积分与签到记录 | `$DSH_HOME/workbuddy/accounts/` |
+| 账号访问令牌、刷新令牌、积分、签到及模型限流记录 | `$DSH_HOME/workbuddy/accounts/` |
 | 用量记录 | `$DSH_HOME/workbuddy/usage/` |
 | 网关接口密钥 | DSH 凭据库中的 `WORKBUDDY_API_KEY` |
 | 插件设置与模型路由 | DSH 用户设置 |
@@ -178,10 +184,10 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 
 ```sh
 # 升级到本版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
 
 # 回退到已有旧版标签
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.0"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
 ```
 
 本地 `link:` 方式，在插件源码目录执行：
@@ -189,8 +195,8 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.1
-# 回退时改为：git switch --detach v0.2.0
+git switch --detach v0.2.2
+# 回退时改为：git switch --detach v0.2.1
 ```
 
 如果存在本地修改，先自行保存，避免覆盖。切换版本后重启 DSH 并刷新页面。`link:` 安装的版本由本地目录决定，重新安装其他目录中的副本不会更新正在使用的插件。
@@ -208,6 +214,7 @@ git switch --detach v0.2.1
 | 桌面账号扫描为空 | 检查平台目录、两个 `.info` 文件，或设置 `WORKBUDDY_DESKTOP_AUTH_DIR` |
 | 签到状态未更新 | 确认是国内版，重新签到并检查操作错误；历史记录不代表今天的状态 |
 | 模型列表为空 | 确认网关运行、区域正确、账号可用，写入模型路由后刷新页面 |
+| 返回 429 / 6004 | 查看账号卡片的模型恢复时间；等待到期或手动选择其他模型。刷新积分不会清除模型限流 |
 | 上游 APISIX 返回 502/504 | 本版在连接阶段尝试同区其他账号；如果上游服务整体故障，需等待恢复或更换模型。切换无法保证消除错误 |
 | 日志出现红色 | 本版将 HTTP `2xx/3xx` 访问日志归为普通日志；其余 stderr 仍可能标红，应结合状态码和文字判断 |
 

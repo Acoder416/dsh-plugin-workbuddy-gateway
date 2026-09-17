@@ -19,6 +19,8 @@ Only the Python standard library is required.
 import argparse
 import base64
 import hashlib
+import io
+import math
 import re
 import json
 import os
@@ -33,6 +35,9 @@ import uuid
 
 import wb_accounts
 import wb_catalog
+from wb_rate_limits import rate_limit_reset, is_model_rate_limit
+
+RATE_LIMIT_FALLBACK_SECONDS = 300
 
 CURRENT_REALM = os.environ.get("WB_PROXY_DEFAULT_REALM", "intl")
 
@@ -1427,21 +1432,16 @@ def build_upstream_body(payload):
 def open_upstream(payload, session_key=None, target_realm=None):
     realm = target_realm or detect_model_realm(payload.get("model")) or CURRENT_REALM
     body = json.dumps(build_upstream_body(payload), ensure_ascii=False).encode("utf-8")
-    total = max(1, POOL.count_ready(realm)) if POOL else 1
+    model = str(payload.get("model") or "")
+    total = max(1, POOL.count_ready(realm, model)) if POOL else 1
     tried = set()
     last_error = None
-    rejected_429 = []
     for _ in range(total):
-        account = POOL.pick_for_session(realm=realm, session_key=session_key, exclude=tried) if POOL else None
+        account = POOL.pick_for_session(
+            realm=realm, session_key=session_key, exclude=tried, model=model,
+        ) if POOL else None
         if account is None:
-            # Nothing is ready. Answering "no usable account" without contacting
-            # the upstream turns a limit that may clear in seconds into a hard
-            # failure, so give the account closest to cooling off one attempt. It
-            # is still one attempt per request, so this cannot stampede.
-            if not tried:
-                account = POOL.pick_shortest_cooldown(realm=realm, exclude=tried)
-            if account is None:
-                break
+            break
         if account.realm != realm:
             if session_key and POOL: POOL.affinity.unbind(session_key)
             continue
@@ -1452,40 +1452,58 @@ def open_upstream(payload, session_key=None, target_realm=None):
                                      headers=account.headers(purpose="chat"))
         try:
             resp = urllib.request.urlopen(req, timeout=600)
+            if isinstance(last_error, urllib.error.HTTPError):
+                last_error.close()
             account.clear_error()
+            account.clear_model_rate_limit(model)
             return resp, account
         except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403, 429, 502, 503, 504):
-                log("account %s rejected (HTTP %s), rotating" % (account.uid[:8], exc.code))
+            # Preserve the upstream payload for both supported client protocols.
+            raw = exc.read(64 * 1024)
+            exc.close()
+            limited = is_model_rate_limit(exc.code, raw)
+            error = urllib.error.HTTPError(exc.url, 429 if limited else exc.code,
+                                           exc.reason, exc.headers, io.BytesIO(raw))
+            if limited or exc.code in (401, 403, 502, 503, 504):
                 if session_key and POOL:
                     POOL.affinity.unbind(session_key)
-                # Upstream gateway failures do not invalidate the account.
-                # The request-local tried set already prevents repeat attempts.
-                if exc.code in (401, 403, 429):
-                    account.note_error("HTTP %s" % exc.code,
-                                       cooldown=300 if exc.code == 429 else 60,
-                                       single_account=(total <= 1))
-                    if exc.code == 429:
-                        rejected_429.append(account)
-                last_error = exc
+                if limited:
+                    reset_at = rate_limit_reset(raw, exc.headers, fallback_seconds=RATE_LIMIT_FALLBACK_SECONDS)
+                    account.note_model_rate_limit(model, reset_at)
+                    log("account %s model %s rate limited until %s; selecting another account"
+                        % (account.uid[:8], model,
+                           time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(reset_at))))
+                else:
+                    log("account %s rejected (HTTP %s), rotating" % (account.uid[:8], exc.code))
+                    if exc.code in (401, 403):
+                        account.note_error("HTTP %s" % exc.code, cooldown=60,
+                                           single_account=(total <= 1))
+                if last_error is not None and isinstance(last_error, urllib.error.HTTPError):
+                    last_error.close()
+                last_error = error
                 continue
-            raise
+            raise error
         except Exception as exc:
             if session_key and POOL:
                 POOL.affinity.unbind(session_key)
             account.note_error(str(exc)[:120], cooldown=60, single_account=(total <= 1))
+            if isinstance(last_error, urllib.error.HTTPError):
+                last_error.close()
             last_error = exc
             continue
-    # Every candidate answered 429. The accounts share one egress, so rotating
-    # did not help and the next caller hits the same wall: this is a pool-wide
-    # limit, not a per-account one. Locking the whole pool out for five minutes
-    # for a limit that may clear in seconds is the wrong trade.
-    if total > 1 and len(rejected_429) >= total:
-        for account in rejected_429:
-            account.note_error("HTTP 429 (every candidate)", cooldown=30)
-        log("all %d candidates answered 429; treating it as a pool-wide limit, cooling 30s instead of 300s" % total)
     if last_error is not None:
         raise last_error
+    # A persisted model limit must remain a 429 after restart, with no probe
+    # before the earliest eligible account's reset time.
+    reset_at = POOL.next_model_reset(realm, model) if POOL else None
+    if reset_at is not None:
+        detail = json.dumps({"code": 6004, "model": model,
+                             "msg": "All eligible accounts are rate limited for this model; "
+                                    "wait until reset or select another model.",
+                             "resetAt": reset_at}).encode("utf-8")
+        raise urllib.error.HTTPError("local-account-pool", 429, "Model rate limited",
+                                     {"Retry-After": str(max(1, math.ceil(reset_at - time.time())))},
+                                     io.BytesIO(detail))
     raise RuntimeError(f"no usable account for realm '{realm}': all are disabled, cooling down, or expired")
 
 
@@ -2607,6 +2625,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global POOL, ACCOUNTS_DIR, API_KEY, SYSTEM_PROMPT, USAGE_DIR, USAGE_LOG, USAGE_SUMMARY
+    global RATE_LIMIT_FALLBACK_SECONDS
     API_KEY_GENERATED = False
 
     ap = argparse.ArgumentParser(description="WorkBuddy (workbuddy.ai) -> OpenAI-compatible proxy")
@@ -2629,7 +2648,13 @@ def main():
                     help="where the per-account credential files live (default: ./accounts)")
     ap.add_argument("--import-desktop", action="store_true",
                     help="import the desktop app credential as an account, then exit")
+    ap.add_argument("--rate-limit-fallback-seconds", type=float,
+                    default=os.environ.get("WB_RATE_LIMIT_FALLBACK_SECONDS", "300"),
+                    help="model limit duration when no upstream reset time is available")
     args = ap.parse_args()
+    if not math.isfinite(args.rate_limit_fallback_seconds) or args.rate_limit_fallback_seconds <= 0:
+        ap.error("--rate-limit-fallback-seconds must be a positive finite number")
+    RATE_LIMIT_FALLBACK_SECONDS = args.rate_limit_fallback_seconds
 
     # LAN mode: bind everywhere, and default to the fixed key "qwer.1234".
     if args.lan:

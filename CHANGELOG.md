@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 — 2026-09-17
+
+- Persist HTTP 429 / business-code 6004 limits per account and model, using the upstream reset time and UTC offset, then Retry-After, then a configurable 300-second fallback (`WB_RATE_LIMIT_FALLBACK_SECONDS`). Other models remain eligible.
+- Try other eligible accounts in the same realm at most once per request. Skip restricted account/model pairs until their deadline; when all are restricted, return 429 with the earliest reset time instead of repeatedly probing or reporting a generic unavailable pool.
+- Show active model restrictions and estimated recovery times on account cards. Preserve restrictions across restarts, credential reimports, and enable toggles.
+- Replace v0.2.1's pool-wide limit assumption and cooldown bypass. Several accounts returning 429 does not prove a shared IP limit; their individual reset times can differ.
+- Preserve upstream error bodies for Chat Completions and Responses clients, including HTTP 400 carrying business code 6004. Retain bounded 502/503/504 failover and existing authentication/network error handling.
+- Add offline regression coverage for three distinct reset times, persistence, model isolation, concurrent saves, realm isolation, and both client protocols. Keep `v0.2.1` unchanged for rollback.
+
 ## 0.2.1 — 2026-09-17
 
 - Stop a single rate-limited request from locking the whole account pool out for five minutes. A 429 cooled the account it touched for 300 seconds, and the failover path tries every candidate within one request, so three accounts answering 429 once each put the entire pool in cooldown — after which every request failed in about 20 ms with `no usable account for realm 'intl'` until the cooldowns lapsed. When *every* candidate answers 429, the limit is pool-wide (the accounts share one egress, so rotating did not help) and the cooldown is now 30 seconds.

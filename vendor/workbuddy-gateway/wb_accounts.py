@@ -5,6 +5,7 @@ import os
 import ssl
 import sys
 import threading
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -227,6 +228,7 @@ class Account(object):
     def __init__(self, data, path=None):
         data = data or {}
         self.path = path
+        self._state_lock = threading.RLock()
         token = str(data.get("accessToken") or "")
         self.uid = str(data.get("uid") or jwt_uid(token))
         self.nickname = str(data.get("nickname") or "")
@@ -244,6 +246,13 @@ class Account(object):
         self.enabled = data.get("enabled", True)
         self.last_error = str(data.get("lastError") or "")
         self.cooldown_until = float(data.get("cooldownUntil") or 0)
+        raw_limits = data.get("modelRateLimits")
+        self.model_rate_limits = {
+            str(model): float(reset)
+            for model, reset in (raw_limits.items() if isinstance(raw_limits, dict) else [])
+            if isinstance(model, str) and isinstance(reset, (int, float))
+            and not isinstance(reset, bool) and math.isfinite(reset) and reset > 0
+        }
         self.credits = data.get("credits") or None
         self.last_checkin = data.get("lastCheckin") or None
         self.checkin_claimed = data.get("checkinClaimed")
@@ -264,6 +273,7 @@ class Account(object):
             "enabled": self.enabled,
             "lastError": self.last_error,
             "cooldownUntil": self.cooldown_until,
+            "modelRateLimits": self.active_model_limits(),
             "credits": self.credits,
             "lastCheckin": self.last_checkin,
             "checkinClaimed": self.checkin_claimed,
@@ -286,6 +296,7 @@ class Account(object):
             "lastError": self.last_error,
             "inCooldown": self.cooldown_until > time.time(),
             "cooldownFor": round(max(0.0, self.cooldown_until - time.time())) or None,
+            "modelRateLimits": self.active_model_limits(),
             "addedAt": self.added_at,
             "file": os.path.basename(self.path) if self.path else None,
             "credits": self.credits,
@@ -300,12 +311,25 @@ class Account(object):
         os.makedirs(directory, exist_ok=True)
         name = (self.uid or uuid.uuid4().hex) + ".json"
         path = os.path.join(directory, name)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(self.to_dict(), fh, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-        self.path = path
-        return path
+        with self._state_lock:
+            # Every caller, including refresh/check-in, writes under the same
+            # lock so concurrent model limits cannot replace a newer snapshot.
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory,
+                                             prefix=name + ".", suffix=".tmp", delete=False) as fh:
+                tmp = fh.name
+                try:
+                    json.dump(self.to_dict(), fh, ensure_ascii=False, indent=2)
+                except BaseException:
+                    fh.close()
+                    os.unlink(tmp)
+                    raise
+            try:
+                os.replace(tmp, path)
+            finally:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+            self.path = path
+            return path
 
     def delete(self):
         if self.path and os.path.exists(self.path):
@@ -326,6 +350,38 @@ class Account(object):
             self.refresh()
             return True
         return self.refresh()
+
+    def active_model_limits(self):
+        """Public model reset timestamps in epoch seconds; expired entries are omitted."""
+        with self._state_lock:
+            now = time.time()
+            return {m: t for m, t in self.model_rate_limits.items() if t > now}
+
+    def ready_for_model(self, model=None):
+        """A model restriction leaves this account available for other models."""
+        if model and self.model_reset_at(model) > time.time():
+            return False
+        return self.ready()
+
+    def model_reset_at(self, model):
+        """Return an epoch-seconds deadline, or zero if none is recorded."""
+        with self._state_lock:
+            return self.model_rate_limits.get(str(model), 0) if model else 0
+
+    def note_model_rate_limit(self, model, reset_at):
+        """Persist a model limit without changing account-wide authentication state."""
+        with self._state_lock:
+            self.model_rate_limits[str(model)] = max(reset_at, self.model_reset_at(model))
+            if self.path:
+                self.save(os.path.dirname(self.path))
+
+    def clear_model_rate_limit(self, model):
+        """Remove only expired limits; a concurrent 429 wins over an older success."""
+        with self._state_lock:
+            if model in self.model_rate_limits and self.model_rate_limits[model] <= time.time():
+                del self.model_rate_limits[model]
+                if self.path:
+                    self.save(os.path.dirname(self.path))
 
     def headers(self, purpose="chat"):
         cfg = get_realm_config(self.realm)
@@ -597,6 +653,8 @@ class AccountPool(object):
                     account.credits = existing.credits
                 if not account.last_checkin and existing.last_checkin:
                     account.last_checkin = existing.last_checkin
+                if not account.model_rate_limits and existing.model_rate_limits:
+                    account.model_rate_limits = dict(existing.model_rate_limits)
                 self.accounts[self.accounts.index(existing)] = account
             else:
                 self.accounts.append(account)
@@ -627,26 +685,30 @@ class AccountPool(object):
                 if enabled: account.clear_error()
                 account.save(self.dir)
 
-    def count_ready(self, realm=None):
+    def count_ready(self, realm=None, model=None):
         with self._lock:
             snapshot = [a for a in self.accounts if not realm or a.realm == realm]
-        return sum(1 for a in snapshot if a.enabled and a.access_token)
+        # This count bounds attempts and feeds status pages; credential refresh
+        # belongs to selection, never to a status read.
+        now = time.time()
+        return sum(1 for a in snapshot if a.enabled and a.access_token
+                   and (not model or a.model_reset_at(model) <= now))
 
-    def pick_for_session(self, realm=None, session_key=None, exclude=None):
+    def pick_for_session(self, realm=None, session_key=None, exclude=None, model=None):
         exclude = exclude or set()
         if session_key:
             bound_uid = self.affinity.get(session_key)
             if bound_uid and bound_uid not in exclude:
                 account = self.get(bound_uid)
-                if account and account.realm == realm and account.ready():
+                if account and account.realm == realm and account.ready_for_model(model):
                     return account
                 self.affinity.unbind(session_key)
-        account = self.pick(realm=realm, exclude=exclude)
+        account = self.pick(realm=realm, exclude=exclude, model=model)
         if account and session_key:
             self.affinity.bind(session_key, account.uid)
         return account
 
-    def pick(self, realm=None, exclude=None):
+    def pick(self, realm=None, exclude=None, model=None):
         exclude = exclude or set()
         with self._lock:
             snapshot = [a for a in self.accounts if not realm or a.realm == realm]
@@ -657,33 +719,20 @@ class AccountPool(object):
             index = (start + offset) % total
             account = snapshot[index]
             if account.uid in exclude: continue
-            if account.ready():
+            if account.ready_for_model(model):
                 with self._lock: self._cursor = (index + 1) % total
                 return account
         return None
 
-    def pick_shortest_cooldown(self, realm=None, exclude=None):
-        """The cooling account closest to being usable again, or None.
-
-        A last resort for when nothing is ready. A 429 usually clears within
-        seconds, so answering "no usable account" without trying anything turns a
-        brief upstream limit into a five-minute outage for the caller. Only
-        accounts that are enabled and hold a token are considered; the caller is
-        still bounded to one attempt per request, so this cannot stampede the
-        upstream.
-        """
-        exclude = exclude or set()
+    def next_model_reset(self, realm, model):
+        """Earliest model deadline among otherwise eligible accounts, without refresh I/O."""
+        now = time.time()
         with self._lock:
-            candidates = [
-                account for account in self.accounts
-                if (not realm or account.realm == realm)
-                and account.uid not in exclude
-                and account.enabled
-                and account.access_token
-            ]
-        if not candidates:
-            return None
-        return min(candidates, key=lambda account: account.cooldown_until)
+            candidates = [a for a in self.accounts if a.realm == realm and a.enabled and a.access_token
+                          and a.cooldown_until <= now
+                          and (not a.expires_at or a.expires_at > now or a.refresh_token)]
+        deadlines = [a.model_reset_at(model) for a in candidates]
+        return min(deadlines) if deadlines and all(t > now for t in deadlines) else None
 
     def representative(self, realm=None):
         with self._lock:
