@@ -258,7 +258,7 @@ def record_error(model, status, message, elapsed_ms=None):
         "model": model,
         "error": True,
         "status": status,
-        "message": str(message)[:200],
+        "message": str(message)[:2048],
         "elapsed_ms": elapsed_ms,
     }
     with _lock:
@@ -1429,6 +1429,15 @@ def build_upstream_body(payload):
     return body
 
 
+def is_content_rejection(raw):
+    """WorkBuddy code 11140 rejects request content, not the account credential."""
+    try:
+        data = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        return False
+    return isinstance(data, dict) and data.get("code") in (11140, "11140")
+
+
 def open_upstream(payload, session_key=None, target_realm=None):
     realm = target_realm or detect_model_realm(payload.get("model")) or CURRENT_REALM
     body = json.dumps(build_upstream_body(payload), ensure_ascii=False).encode("utf-8")
@@ -1461,6 +1470,13 @@ def open_upstream(payload, session_key=None, target_realm=None):
             # Preserve the upstream payload for both supported client protocols.
             raw = exc.read(64 * 1024)
             exc.close()
+            if is_content_rejection(raw):
+                if isinstance(last_error, urllib.error.HTTPError):
+                    last_error.close()
+                # A client error preserves the rejection without making DSH
+                # classify the upstream's 403 as an invalid local API key.
+                raise urllib.error.HTTPError(exc.url, 400, "Content review rejected request",
+                                             exc.headers, io.BytesIO(raw))
             limited = is_model_rate_limit(exc.code, raw)
             error = urllib.error.HTTPError(exc.url, 429 if limited else exc.code,
                                            exc.reason, exc.headers, io.BytesIO(raw))
@@ -1483,10 +1499,12 @@ def open_upstream(payload, session_key=None, target_realm=None):
                 last_error = error
                 continue
             raise error
-        except Exception as exc:
+        except (urllib.error.URLError, OSError) as exc:
             if session_key and POOL:
                 POOL.affinity.unbind(session_key)
-            account.note_error(str(exc)[:120], cooldown=60, single_account=(total <= 1))
+            # Transport failures provide no evidence that credentials are bad.
+            # The tried set bounds this request without disabling later retries.
+            log("account %s transport failure (%s); trying next account" % (account.uid[:8], exc))
             if isinstance(last_error, urllib.error.HTTPError):
                 last_error.close()
             last_error = exc
@@ -2125,6 +2143,19 @@ class Handler(BaseHTTPRequestHandler):
     def _error(self, code, message, err_type="server_error"):
         self._json(code, {"error": {"message": message, "type": err_type, "code": code}})
 
+    def _upstream_error(self, exc, model, started_at):
+        """Return the upstream explanation without truncating escaped review text."""
+        with exc:
+            detail = exc.read(64 * 1024).decode("utf-8", "replace")
+        try:
+            detail = json.dumps(json.loads(detail), ensure_ascii=False)
+        except ValueError:
+            pass  # Gateways may return HTML or plain text instead of JSON.
+        record_error(model, exc.code, detail,
+                     elapsed_ms=int((time.time() - started_at) * 1000))
+        return self._error(exc.code, f"upstream {exc.code}: {detail}",
+                           "invalid_request_error" if exc.code == 400 else "server_error")
+
     def _key_ok(self):
         """True when the request carries the right key (or no key is needed)."""
         if not API_KEY:
@@ -2224,7 +2255,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {
                 "accounts": account_views(realm=query.get('realm', [None])[0] or CURRENT_REALM),
                 "storage": ACCOUNTS_DIR,
-                "usable": POOL.count_ready() if POOL else 0,
+                "usable": POOL.count_ready(query.get('realm', [None])[0] or CURRENT_REALM) if POOL else 0,
             })
         if path == "/accounts/login/poll":
             if not self._authorized():
@@ -2438,13 +2469,10 @@ class Handler(BaseHTTPRequestHandler):
             req_realm = self.headers.get("X-Realm") or parse_qs(urlparse(self.path).query).get("realm", [None])[0] or CURRENT_REALM
             upstream, account = open_upstream(chat_req, session_key=session_key, target_realm=req_realm)
         except urllib.error.HTTPError as exc:
-            detail = exc.read(600).decode("utf-8", "replace")
-            record_error(model, exc.code, detail,
-                         elapsed_ms=int((time.time() - t_start) * 1000))
-            return self._error(exc.code, f"upstream {exc.code}: {detail}")
+            return self._upstream_error(exc, model, t_start)
         except Exception as exc:
             message = str(exc)
-            record_error(model, 502, message,
+            record_error(model, 503 if message.startswith("no usable account") else 502, message,
                          elapsed_ms=int((time.time() - t_start) * 1000))
             if message.startswith("no usable account"):
                 return self._error(503, message + 
@@ -2545,13 +2573,10 @@ class Handler(BaseHTTPRequestHandler):
             req_realm = self.headers.get("X-Realm") or parse_qs(urlparse(self.path).query).get("realm", [None])[0] or CURRENT_REALM
             upstream, account = open_upstream(payload, session_key=session_key, target_realm=req_realm)
         except urllib.error.HTTPError as exc:
-            detail = exc.read(600).decode("utf-8", "replace")
-            record_error(model, exc.code, detail,
-                         elapsed_ms=int((time.time() - t_start) * 1000))
-            return self._error(exc.code, f"upstream {exc.code}: {detail}")
+            return self._upstream_error(exc, model, t_start)
         except Exception as exc:
             message = str(exc)
-            record_error(model, 502, message, elapsed_ms=int((time.time() - t_start) * 1000))
+            record_error(model, 503 if message.startswith("no usable account") else 502, message, elapsed_ms=int((time.time() - t_start) * 1000))
             if message.startswith("no usable account"):
                 return self._error(503, message + 
                                    " - add or enable one at the dashboard (/)")

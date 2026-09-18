@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 — 2026-09-19
+
+- Return content-review code 11140 as HTTP 400 with the upstream explanation for Chat Completions and Responses. Do not rotate or cool accounts for rejected content; DSH no longer labels this rejection as an invalid API key.
+- Keep SSL disconnects, connection resets, and timeouts from cooling the entire account pool. Retain bounded same-realm attempts, authentication cooldowns, and per-model rate limits.
+- Share read-only credential eligibility between account listings and pool counts; expired cooldowns become eligible despite historical errors. Scope account endpoint counts to the requested realm.
+- Preserve readable upstream explanations and record exhausted-pool failures as HTTP 503 in usage logs.
+- Add offline regressions for content rejection, both client protocols, network retry, authentication guards, and account availability. Restart DSH after upgrading; account data requires no migration.
+
 ## 0.2.2 — 2026-09-17
 
 - Persist HTTP 429 / business-code 6004 limits per account and model, using the upstream reset time and UTC offset, then Retry-After, then a configurable 300-second fallback (`WB_RATE_LIMIT_FALLBACK_SECONDS`). Other models remain eligible.

@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.2.2。** 安装建议固定到 Git 标签 `v0.2.2`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.2.3。** 安装建议固定到 Git 标签 `v0.2.3`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.2.2 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.3 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -161,7 +161,9 @@ dsh --profile web
 
 同区所有候选账号都被该模型的限流记录阻止时，后续请求直接返回 `429`，错误信息包含最早的 `resetAt`（Unix 秒），到期前不再请求上游。多个账号均返回 `429` 不能据此判断为共享 IP 限流；各账号的恢复时间分别保存。
 
-上游连接阶段遇到 `401`、`403` 或网络异常时，保留原有账号错误处理并尝试其他账号。`502`、`503`、`504` 也会尝试其他账号，但不将账号置入冷却。一次请求中每个候选账号最多尝试一次；没有其他可用账号或同一区域全部失败时仍返回错误。其他 HTTP 错误、流式响应开始后的失败不保证切换；账号不会跨区域使用。
+上游业务码 `11140` 表示内容未通过安全审核：网关返回 HTTP 400 并保留上游说明，不轮换或冷却账号。相同内容不会因更换账号而重新提交。其他 `401`、`403` 保留鉴权冷却并尝试同区其他账号；`502`、`503`、`504`、SSL 断连和连接超时会尝试其他账号，但不使账号进入冷却。一次请求中每个候选账号最多尝试一次；全部失败时仍返回错误。流式响应开始后不会重放请求，账号不会跨区域使用。
+
+可用账号数排除停用、冷却、缺少令牌及已过期且无法刷新的账号；历史错误本身不会阻止冷却结束后的重试。可刷新凭证只表示允许尝试刷新，不保证刷新或模型请求成功。积分余额、模型限流和账号可用状态分别显示。
 
 WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出桌面端不保证这些凭证立即失效。
 
@@ -184,10 +186,10 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 
 ```sh
 # 升级到本版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 
 # 回退到已有旧版标签
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
 ```
 
 本地 `link:` 方式，在插件源码目录执行：
@@ -195,8 +197,8 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.2
-# 回退时改为：git switch --detach v0.2.1
+git switch --detach v0.2.3
+# 回退时改为：git switch --detach v0.2.2
 ```
 
 如果存在本地修改，先自行保存，避免覆盖。切换版本后重启 DSH 并刷新页面。`link:` 安装的版本由本地目录决定，重新安装其他目录中的副本不会更新正在使用的插件。

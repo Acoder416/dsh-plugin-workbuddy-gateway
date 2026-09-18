@@ -289,6 +289,7 @@ class Account(object):
             "platform": self.platform,
             "enterpriseId": self.enterprise_id,
             "enabled": bool(self.enabled),
+            "available": self.available(),
             "source": self.source,
             "expiresAt": exp,
             "expiresIn": _human_delta(exp - time.time()) if exp else None,
@@ -335,10 +336,19 @@ class Account(object):
         if self.path and os.path.exists(self.path):
             os.remove(self.path)
 
-    def ready(self):
+    def available(self, model=None):
+        """Eligible for selection; expired tokens need refresh there, never on status reads."""
         if not self.enabled or not self.access_token:
             return False
         if self.cooldown_until > time.time():
+            return False
+        if model and self.model_reset_at(model) > time.time():
+            return False
+        exp = self.expires_at or jwt_exp(self.access_token)
+        return not exp or exp > time.time() or bool(self.refresh_token)
+
+    def ready(self):
+        if not self.available():
             return False
         exp = self.expires_at or jwt_exp(self.access_token)
         if not exp:
@@ -690,9 +700,7 @@ class AccountPool(object):
             snapshot = [a for a in self.accounts if not realm or a.realm == realm]
         # This count bounds attempts and feeds status pages; credential refresh
         # belongs to selection, never to a status read.
-        now = time.time()
-        return sum(1 for a in snapshot if a.enabled and a.access_token
-                   and (not model or a.model_reset_at(model) <= now))
+        return sum(1 for a in snapshot if a.available(model))
 
     def pick_for_session(self, realm=None, session_key=None, exclude=None, model=None):
         exclude = exclude or set()

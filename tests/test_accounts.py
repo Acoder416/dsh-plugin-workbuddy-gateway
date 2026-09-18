@@ -15,6 +15,28 @@ import wb_accounts as accounts
 
 
 class AccountTests(unittest.TestCase):
+    def test_availability_tracks_cooldown_and_credentials_without_refresh_io(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(accounts.time, 'time', return_value=1000), \
+                patch.object(accounts.Account, 'refresh', side_effect=AssertionError('status must not refresh')):
+            pool = accounts.AccountPool(directory)
+            pool.accounts = [accounts.Account({'uid': str(i), 'realm': 'intl', 'accessToken': 'fake', **data})
+                             for i, data in enumerate([
+                                 {'lastError': 'HTTP 403', 'cooldownUntil': 999},
+                                 {'cooldownUntil': 1001},
+                                 {'enabled': False},
+                                 {'accessToken': ''},
+                                 {'expiresAt': 900},
+                                 {'expiresAt': 900, 'refreshToken': 'fake-refresh'},
+                                 {'expiresAt': 1200},
+                             ])]
+            self.assertEqual([a.public()['available'] for a in pool.accounts],
+                             [True, False, False, False, False, True, True])
+            self.assertEqual(pool.count_ready('intl'), 3)
+            self.assertTrue(pool.accounts[0].ready())
+            with patch.object(accounts.time, 'time', return_value=1002):
+                self.assertTrue(pool.accounts[1].public()['available'])
+                self.assertEqual(pool.count_ready('intl'), 4)
+
     def test_http_already_claimed_is_persisted_and_reported_as_success(self):
         with tempfile.TemporaryDirectory() as directory:
             account = accounts.Account({'uid': 'test', 'realm': 'cn', 'accessToken': 'fake'})
@@ -160,7 +182,7 @@ class AccountTests(unittest.TestCase):
     def test_status_count_does_not_refresh_credentials(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(accounts.time, 'time', return_value=1000):
             pool = accounts.AccountPool(directory)
-            pool.accounts = [accounts.Account({'uid': 'a', 'accessToken': 't', 'expiresAt': 900,
+            pool.accounts = [accounts.Account({'uid': 'a', 'accessToken': 't', 'expiresAt': 900, 'refreshToken': 'refresh',
                                                'modelRateLimits': {'model-a': 1300}})]
             with patch.object(accounts.Account, 'refresh', side_effect=AssertionError('unexpected refresh')):
                 self.assertEqual(pool.count_ready('intl'), 1)
