@@ -201,6 +201,31 @@ class UpstreamTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return value
 
+    def test_checkin_refreshes_credits_before_returning_snapshot(self):
+        account = self.pool.accounts[3]
+        calls = []
+        account.checkin = lambda: (calls.append('checkin') or {'ok': True, 'claimed': True})
+        def fetch_credits():
+            calls.append('credits')
+            account.credits = {'remain': 42.5}
+            return {'ok': True, 'credits': account.credits}
+        account.fetch_credits = fetch_credits
+        account.credits = {'remain': 42.5}
+        handler = object.__new__(wb_proxy.Handler)
+        handler.path = '/accounts/checkin'
+        handler.headers = {'Content-Length': '2'}
+        handler.rfile = io.BytesIO(b'{}')
+        handler._authorized = lambda: True
+        handler._json = lambda code, payload: (code, payload)
+
+        status, payload = handler.do_POST()
+
+        self.assertEqual(status, 200)
+        self.assertEqual(calls, ['checkin', 'credits'])
+        self.assertEqual(payload['results'][0]['credits']['remain'], 42.5)
+        china = next(item for item in payload['accounts'] if item['uid'] == 'china-only')
+        self.assertEqual(china['credits']['remain'], 42.5)
+
     def test_502_then_504_fail_over_to_third_global_account(self):
         self.pool.affinity.bind('conversation', 'global-0')
         success = io.BytesIO(b'data: [DONE]\n\n')

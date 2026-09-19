@@ -70,6 +70,17 @@ class AccountTests(unittest.TestCase):
                 self.assertEqual(result['ok'], expected)
                 self.assertEqual(account.checkin_claimed is True, expected)
 
+    def test_checkin_status_expires_at_local_day_boundary(self):
+        today = accounts.time.strftime('%Y-%m-%d')
+        account = accounts.Account({
+            'realm': 'cn', 'accessToken': 'fake',
+            'checkinClaimed': True, 'lastCheckin': '2000-01-01 23:59:59',
+        })
+        self.assertFalse(account.public()['checkinClaimed'])
+
+        account.last_checkin = today + ' 00:00:01'
+        self.assertTrue(account.public()['checkinClaimed'])
+
     def test_import_reads_credits_after_cn_checkin(self):
         for realm in ('cn', 'intl'):
             with self.subTest(realm=realm), tempfile.TemporaryDirectory() as directory:
@@ -81,6 +92,7 @@ class AccountTests(unittest.TestCase):
                 def checkin(account):
                     calls.append('checkin')
                     account.checkin_claimed = True
+                    account.last_checkin = accounts.time.strftime('%Y-%m-%d %H:%M:%S')
                     return {'ok': True}
 
                 def credits(account):

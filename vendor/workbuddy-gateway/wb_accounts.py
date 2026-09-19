@@ -302,7 +302,7 @@ class Account(object):
             "file": os.path.basename(self.path) if self.path else None,
             "credits": self.credits,
             "lastCheckin": self.last_checkin,
-            "checkinClaimed": self.checkin_claimed,
+            "checkinClaimed": self.checkin_claimed_today() if self.realm == "cn" else None,
             "canCheckin": self.realm == "cn",
             "machineId": derive_id(self.uid, "machine"),
             "sessionId": derive_id(self.uid, "session"),
@@ -366,6 +366,12 @@ class Account(object):
         with self._state_lock:
             now = time.time()
             return {m: t for m, t in self.model_rate_limits.items() if t > now}
+
+    def checkin_claimed_today(self):
+        """Return whether the stored check-in confirmation belongs to today."""
+        if self.checkin_claimed is not True or not isinstance(self.last_checkin, str):
+            return False
+        return self.last_checkin[:10] == time.strftime("%Y-%m-%d", time.localtime())
 
     def ready_for_model(self, model=None):
         """A model restriction leaves this account available for other models."""
@@ -478,7 +484,7 @@ class Account(object):
                 self.last_checkin = time.strftime("%Y-%m-%d %H:%M:%S")
             if self.path and os.path.exists(os.path.dirname(self.path)):
                 self.save(os.path.dirname(self.path))
-            return {"ok": (code == 0 or code == 10001), "claimed": self.checkin_claimed,
+            return {"ok": (code == 0 or code == 10001), "claimed": self.checkin_claimed_today(),
                     "code": code, "msg": msg, "data": payload.get("data")}
         except urllib.error.HTTPError as exc:
             try:
@@ -496,7 +502,7 @@ class Account(object):
                         self.last_checkin = time.strftime("%Y-%m-%d %H:%M:%S")
                         if self.path and os.path.exists(os.path.dirname(self.path)):
                             self.save(os.path.dirname(self.path))
-                return {"ok": claimed is True, "claimed": self.checkin_claimed, "code": code, "msg": message,
+                return {"ok": claimed is True, "claimed": self.checkin_claimed_today(), "code": code, "msg": message,
                         "error": None if claimed is True else message}
             except Exception:
                 return {"ok": False, "error": "HTTP %d" % exc.code}

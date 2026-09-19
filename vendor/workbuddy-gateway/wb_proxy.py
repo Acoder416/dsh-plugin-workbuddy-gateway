@@ -2391,6 +2391,14 @@ class Handler(BaseHTTPRequestHandler):
                 if account is None:
                     continue
                 res = account.checkin()
+                if res.get("ok"):
+                    # A successful daily check-in changes the billing balance.
+                    # Read it before returning so the dashboard can render the
+                    # new score without waiting for its next poll.
+                    credits = account.fetch_credits()
+                    res["credits"] = account.credits
+                    if not credits.get("ok"):
+                        res["creditsError"] = credits.get("error", "credit refresh failed")
                 results.append({"uid": account.uid, "nickname": account.nickname, **res})
             return self._json(200, {"results": results, "accounts": account_views()})
 

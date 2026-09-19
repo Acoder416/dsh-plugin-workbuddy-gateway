@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.2.4。** 安装建议固定到 Git 标签 `v0.2.4`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.2.3。** 安装建议固定到 Git 标签 `v0.2.3`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.4"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.2.4 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.3 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -121,7 +121,7 @@ pnpm --dir "$dsh_profile_dir" add "link:$dsh_plugin_dir"
 
 刷新积分需要实时请求上游，每个账号一次，连接不稳定时会先重试再返回结果。因此「刷新全部积分」在账号较多或网络较差时（例如经由代理访问国际版）可能要等待较久，也可能失败；只关心一个账号时，用账号卡片上的「刷新积分」。
 
-账号卡片显示的是最近保存的领取状态和确认时间，并非持续查询官方签到状态。历史时间不代表今天已领取；需要时点击签到重新确认。国际版不提供此签到功能。
+账号卡片显示的是最近保存的领取状态和确认时间；国内版会按本地日期判断，昨天或更早的记录在今天自动显示为「未签到」，不会跨天沿用。页面读取本地状态不会额外请求上游；需要立即确认时点击签到。国际版不提供此签到功能。
 
 「领取积分」会调用内置网关的成长任务流程，与每日签到是不同操作。它依赖上游活动接口，耗时和可用性可能变化；失败时查看操作提示，不保证获得积分。
 
@@ -186,7 +186,7 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 
 ```sh
 # 升级到本版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.4"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 
 # 回退到已有旧版标签
 dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
@@ -197,7 +197,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.4
+git switch --detach v0.2.3
 # 回退时改为：git switch --detach v0.2.2
 ```
 
