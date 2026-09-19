@@ -1429,13 +1429,17 @@ def build_upstream_body(payload):
     return body
 
 
-def is_content_rejection(raw):
-    """WorkBuddy code 11140 rejects request content, not the account credential."""
+ACCOUNT_RESTRICTION_CODE = 11140
+ACCOUNT_RESTRICTION_COOLDOWN_SECONDS = 3600
+
+
+def is_account_restriction(raw):
+    """WorkBuddy code 11140 identifies an account-level upstream restriction."""
     try:
         data = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         return False
-    return isinstance(data, dict) and data.get("code") in (11140, "11140")
+    return isinstance(data, dict) and data.get("code") in (ACCOUNT_RESTRICTION_CODE, str(ACCOUNT_RESTRICTION_CODE))
 
 
 def open_upstream(payload, session_key=None, target_realm=None):
@@ -1470,13 +1474,25 @@ def open_upstream(payload, session_key=None, target_realm=None):
             # Preserve the upstream payload for both supported client protocols.
             raw = exc.read(64 * 1024)
             exc.close()
-            if is_content_rejection(raw):
+            if is_account_restriction(raw):
+                if session_key and POOL:
+                    POOL.affinity.unbind(session_key)
+                account.note_error(
+                    "WorkBuddy account restricted by upstream (code %s)" % ACCOUNT_RESTRICTION_CODE,
+                    cooldown=ACCOUNT_RESTRICTION_COOLDOWN_SECONDS,
+                    single_account=(total <= 1),
+                )
+                log("account %s restricted by upstream (code %s); rotating" %
+                    (account.uid[:8], ACCOUNT_RESTRICTION_CODE))
                 if isinstance(last_error, urllib.error.HTTPError):
                     last_error.close()
-                # A client error preserves the rejection without making DSH
-                # classify the upstream's 403 as an invalid local API key.
-                raise urllib.error.HTTPError(exc.url, 400, "Content review rejected request",
-                                             exc.headers, io.BytesIO(raw))
+                # Preserve the upstream trace while returning a client error;
+                # the original 403 would be rendered by DSH as a bad API key.
+                last_error = urllib.error.HTTPError(
+                    exc.url, 400, "WorkBuddy account restricted",
+                    exc.headers, io.BytesIO(raw),
+                )
+                continue
             limited = is_model_rate_limit(exc.code, raw)
             error = urllib.error.HTTPError(exc.url, 429 if limited else exc.code,
                                            exc.reason, exc.headers, io.BytesIO(raw))
@@ -2147,14 +2163,22 @@ class Handler(BaseHTTPRequestHandler):
         """Return the upstream explanation without truncating escaped review text."""
         with exc:
             detail = exc.read(64 * 1024).decode("utf-8", "replace")
+        upstream_data = None
         try:
-            detail = json.dumps(json.loads(detail), ensure_ascii=False)
+            upstream_data = json.loads(detail)
+            detail = json.dumps(upstream_data, ensure_ascii=False)
         except ValueError:
             pass  # Gateways may return HTML or plain text instead of JSON.
         record_error(model, exc.code, detail,
                      elapsed_ms=int((time.time() - started_at) * 1000))
-        return self._error(exc.code, f"upstream {exc.code}: {detail}",
-                           "invalid_request_error" if exc.code == 400 else "server_error")
+        restricted = isinstance(upstream_data, dict) and upstream_data.get("code") in (
+            ACCOUNT_RESTRICTION_CODE, str(ACCOUNT_RESTRICTION_CODE),
+        )
+        prefix = "WorkBuddy account restricted by upstream (code 11140)" if restricted \
+            else f"upstream {exc.code}"
+        return self._error(exc.code, f"{prefix}: {detail}",
+                           "account_restricted" if restricted
+                           else ("invalid_request_error" if exc.code == 400 else "server_error"))
 
     def _key_ok(self):
         """True when the request carries the right key (or no key is needed)."""

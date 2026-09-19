@@ -35,9 +35,12 @@ class UpstreamTests(unittest.TestCase):
                     patch.object(wb_proxy, 'record_error'):
                 for path in ('/v1/chat/completions', '/v1/responses'):
                     with self.subTest(path=path):
+                        for account in self.pool.accounts:
+                            account.clear_error()
                         raw = json.dumps({'code': 11140, 'displayMsg': {'zh': '内容未通过安全审核，请调整后重试。'}}).encode()
-                        error = HTTPError('https://example.invalid', 403, 'Forbidden', {}, io.BytesIO(raw))
-                        with patch.object(wb_proxy.urllib.request, 'urlopen', side_effect=error) as upstream:
+                        with patch.object(wb_proxy.urllib.request, 'urlopen',
+                                          side_effect=[HTTPError('https://example.invalid', 403, 'Forbidden', {}, io.BytesIO(raw))
+                                                       for _ in range(3)]) as upstream:
                             client = http.client.HTTPConnection(*server.server_address, timeout=5)
                             try:
                                 client.request('POST', path, json.dumps({**self.payload, 'input': 'Hi'}),
@@ -48,9 +51,10 @@ class UpstreamTests(unittest.TestCase):
                             finally:
                                 client.close()
                             self.assertEqual(response.status, 400)
-                            self.assertEqual(body['error']['type'], 'invalid_request_error')
+                            self.assertEqual(body['error']['type'], 'account_restricted')
+                            self.assertIn('account restricted', body['error']['message'])
                             self.assertIn('内容未通过安全审核', body['error']['message'])
-                            self.assertEqual(upstream.call_count, 1)
+                            self.assertEqual(upstream.call_count, 3)
                 with patch.object(wb_proxy.urllib.request, 'urlopen') as upstream:
                     client = http.client.HTTPConnection(*server.server_address, timeout=5)
                     try:
@@ -67,8 +71,8 @@ class UpstreamTests(unittest.TestCase):
                     client.request('GET', '/accounts?realm=intl', headers={'Authorization': 'Bearer offline-test-key'})
                     response = client.getresponse()
                     state = json.loads(response.read())
-                    self.assertEqual(state['usable'], 3)
-                    self.assertTrue(all(a['available'] for a in state['accounts']))
+                    self.assertEqual(state['usable'], 0)
+                    self.assertTrue(all(not a['available'] for a in state['accounts']))
                 finally:
                     client.close()
         finally:
@@ -76,25 +80,25 @@ class UpstreamTests(unittest.TestCase):
             worker.join(timeout=5)
             server.server_close()
 
-    def test_content_review_rejection_does_not_rotate_or_cool_accounts(self):
+    def test_account_restriction_rotates_and_cools_accounts_without_blame(self):
         for code in (11140, '11140'):
             with self.subTest(code=code):
                 for account in self.pool.accounts:
                     account.clear_error()
-                self.pool.affinity.bind('content-review', 'global-0')
+                self.pool.affinity.bind('restricted', 'global-0')
                 body = json.dumps({'code': code, 'msg': 'request illegal', 'displayMsg': {
                     'zh': '内容未通过安全审核，请调整后重试。',
                     'en': 'The content did not pass the safety review. Please adjust and retry.',
                 }}).encode()
                 with patch.object(wb_proxy.urllib.request, 'urlopen', side_effect=[HTTPError('https://example.invalid', 403, 'Forbidden', {}, io.BytesIO(body)) for _ in range(3)]) as call:
                     with self.assertRaises(HTTPError) as raised:
-                        wb_proxy.open_upstream(self.payload, session_key='content-review', target_realm='intl')
+                        wb_proxy.open_upstream(self.payload, session_key='restricted', target_realm='intl')
                 self.assertEqual(raised.exception.code, 400)
                 self.assertEqual(json.loads(raised.exception.read())['code'], code)
-                self.assertEqual(call.call_count, 1)
-                self.assertTrue(all(a.ready() for a in self.pool.accounts))
-                self.assertTrue(all(not a.last_error for a in self.pool.accounts))
-                self.assertEqual(self.pool.affinity.get('content-review'), 'global-0')
+                self.assertEqual(call.call_count, 3)
+                self.assertTrue(all(not a.ready() for a in self.pool.accounts[:3]))
+                self.assertTrue(all('account restricted' in a.last_error for a in self.pool.accounts[:3]))
+                self.assertIsNone(self.pool.affinity.get('restricted'))
 
     def test_ssl_failure_does_not_lock_out_next_request(self):
         failure = URLError(ssl.SSLEOFError('UNEXPECTED_EOF_WHILE_READING'))
@@ -116,7 +120,7 @@ class UpstreamTests(unittest.TestCase):
                 self.assertEqual(account.uid, 'global-1')
                 self.assertTrue(self.pool.accounts[0].ready())
 
-    def test_unknown_errors_are_not_mistaken_for_content_review(self):
+    def test_unknown_errors_are_not_mistaken_for_account_restriction(self):
         for body in (b'not JSON', b'[]', b'null', b'{"code":403}', b'{"msg":"request illegal"}'):
             with self.subTest(body=body):
                 for a in self.pool.accounts:
@@ -149,7 +153,7 @@ class UpstreamTests(unittest.TestCase):
                 self.assertEqual(record.call_args.args[1], 503)
                 call.assert_not_called()
 
-    def test_both_protocols_report_content_rejection_and_complete_explanation(self):
+    def test_both_protocols_report_account_restriction_and_complete_explanation(self):
         for path, payload in [('/v1/chat/completions', self.payload),
                               ('/v1/responses', {'model': 'gpt-5.5', 'input': 'Hi'})]:
             with self.subTest(path=path):
@@ -169,11 +173,12 @@ class UpstreamTests(unittest.TestCase):
                         patch.object(wb_proxy.urllib.request, 'urlopen', side_effect=[HTTPError('https://example.invalid', 403, 'Forbidden', {}, io.BytesIO(body)) for _ in range(3)]) as call:
                     status, message, err_type = handler.do_POST()
                 self.assertEqual(status, 400)
-                self.assertEqual(err_type, 'invalid_request_error')
+                self.assertEqual(err_type, 'account_restricted')
+                self.assertIn('account restricted', message)
                 self.assertEqual(json.loads(message.split(': ', 1)[1])['displayMsg']['zh'], reason)
                 self.assertNotIn('403', message)
                 self.assertEqual(record.call_args.args[1], 400)
-                self.assertEqual(call.call_count, 1)
+                self.assertEqual(call.call_count, 3)
 
     def setUp(self):
         directory = tempfile.TemporaryDirectory()

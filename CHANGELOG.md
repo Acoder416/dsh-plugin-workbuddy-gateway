@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.2.3 — 2026-09-19
+## 0.2.4 — 2026-09-19
 
-- Return content-review code 11140 as HTTP 400 with the upstream explanation for Chat Completions and Responses. Do not rotate or cool accounts for rejected content; DSH no longer labels this rejection as an invalid API key.
+- Classify upstream code 11140 as an account-level WorkBuddy restriction when the official client also fails. Temporarily cool and rotate the affected account, preserve the upstream trace, and avoid describing it as a prompt/content error or invalid local API key.
 - Keep SSL disconnects, connection resets, and timeouts from cooling the entire account pool. Retain bounded same-realm attempts, authentication cooldowns, and per-model rate limits.
 - Share read-only credential eligibility between account listings and pool counts; expired cooldowns become eligible despite historical errors. Scope account endpoint counts to the requested realm.
 - Preserve readable upstream explanations and record exhausted-pool failures as HTTP 503 in usage logs.
