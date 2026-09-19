@@ -4,7 +4,7 @@ Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model rout
 
 [中文](README.md) | English
 
-**Version: 0.2.2.** Install from the fixed Git tag `v0.2.2`; `v0.2.1` remains available for rollback. No plugin market is required.
+**Version: 0.2.3.** Install from the fixed Git tag `v0.2.3`; `v0.2.2` remains available for rollback. No plugin market is required.
 
 This is an unofficial integration using WorkBuddy subscription endpoints and DSH internal APIs. Those interfaces can change, and using them may violate service terms or trigger account restrictions.
 
@@ -24,7 +24,7 @@ Python detection tries `python`, then `python3` on Windows, and the reverse orde
 Use an existing, initialized web profile:
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 ```
 
 Then append `dsh-plugin-workbuddy-gateway` to the existing `dsh.profile.bundles` array in the profile's `package.json`. Preserve its other entries. The default profile directory is `~/.dsh/profiles/web`, or `$DSH_HOME/profiles/web` when configured.
@@ -50,7 +50,7 @@ Restart **DSH itself**, then refresh the browser. Restarting only the Python gat
 Keep the checkout in a permanent directory:
 
 ```sh
-git clone --branch v0.2.2 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.3 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -99,7 +99,7 @@ Changing realms updates the account list and model catalog. Automatic route main
 
 Desktop imports attempt CN daily check-in before reading credits; global imports only read credits. Synchronization requires working upstream endpoints. Retry the relevant action if it fails.
 
-**Refresh credits** reads the balance. Upstream values are kept to two decimals, and expired packages are excluded from the usable total. **Check in** invokes the CN daily reward endpoint. Upstream code `10001`, including in an HTTP error response, means the reward was already claimed. The account card shows the last stored confirmation and timestamp, not a continuous query of today's status. Use Check in to reconfirm; an old timestamp does not establish today's claim.
+**Refresh credits** reads the balance. Upstream values are kept to two decimals, and expired packages are excluded from the usable total. **Check in** invokes the CN daily reward endpoint. Upstream code `10001`, including in an HTTP error response, means the reward was already claimed. The account card shows the last stored confirmation and timestamp. For the China realm, the gateway compares that timestamp with the local date, so yesterday's or older record automatically appears as not checked in today. Reading the page does not make another upstream request; use Check in when you need an immediate confirmation.
 
 Refreshing credits queries the upstream live, once per account, and retries before reporting a result. **Refresh all credits** can therefore take a while and may fail when there are several accounts or the network is poor — for example when the global realm is reached through a proxy. To refresh one account, use **Refresh credits** on its card.
 
@@ -111,7 +111,9 @@ The reset deadline comes from the upstream message's date and UTC offset, then f
 
 When model restrictions block all otherwise eligible accounts in the realm, subsequent requests return HTTP 429 with the earliest `resetAt` (Unix seconds) in the error message, without contacting upstream before that deadline. Multiple accounts returning 429 does not establish a shared IP limit; each account retains its own deadline.
 
-During connection setup, HTTP 401/403 and network exceptions retain existing account error handling and try another account. HTTP 502/503/504 also try another account without applying account cooldown. Each candidate is tried at most once per request. With no alternative or all accounts failing, the error is still returned. Other HTTP errors and failures after streaming starts do not guarantee failover. Accounts do not cross realms.
+When the official WorkBuddy client returns upstream code `11140` as well, treat it as an account-level risk restriction, not a prompt problem. The gateway marks that account temporarily unavailable, tries other accounts in the same realm, and returns the upstream trace ID and explanation; DSH no longer renders it as an invalid API key. Contact WorkBuddy support to resolve the restriction; changing the prompt, retrying, or switching local models cannot clear it. Other HTTP 401/403 responses retain authentication cooldown and same-realm failover. HTTP 502/503/504, SSL disconnects, and connection timeouts try other accounts without account cooldown. Each candidate is tried at most once per request; failure across all candidates still returns an error. Requests are not replayed after streaming starts, and accounts never cross realms.
+
+Availability excludes disabled or cooling accounts, missing tokens, and expired credentials without a refresh token. Historical errors alone do not block retry after cooldown. Refreshable credentials are eligible for a refresh attempt, which may still fail. Account availability, model restrictions, and credit balances are separate signals.
 
 The desktop app does not need to stay open after import. Logging out of it does not necessarily revoke the gateway's saved tokens.
 
@@ -146,9 +148,9 @@ Stop DSH and back up the profile configuration, lockfile, and WorkBuddy state be
 
 ```sh
 # Upgrade
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 # Roll back
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.1"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
 ```
 
 For a linked checkout:
@@ -156,8 +158,8 @@ For a linked checkout:
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.2
-# To roll back: git switch --detach v0.2.1
+git switch --detach v0.2.3
+# To roll back: git switch --detach v0.2.2
 ```
 
 Preserve local changes before switching. Restart DSH and refresh the browser afterward. A linked installation follows that directory, not another checkout. Code rollback does not undo reward claims, account changes, or model-route writes. Restore your own configuration backup if needed. See [CHANGELOG.md](CHANGELOG.md).

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 — 2026-09-19
+
+- Treat a stored domestic check-in as current only when its confirmation date is today; yesterday's status now expires automatically at the local day boundary.
+- Refresh domestic account credits immediately after a successful or already-claimed check-in and return the updated account snapshot to the settings page.
+- Apply account snapshots from completed operations immediately in the client, so check-in and credit changes appear without waiting for the polling interval.
+- Clarify that daily check-in and growth-task credit claiming are separate upstream operations; the latter can take longer because it runs multiple task requests.
+
+- Classify upstream code 11140 as an account-level WorkBuddy restriction when the official client also fails. Temporarily cool and rotate the affected account, preserve the upstream trace, and avoid describing it as a prompt/content error or invalid local API key.
+- Keep SSL disconnects, connection resets, and timeouts from cooling the entire account pool. Retain bounded same-realm attempts, authentication cooldowns, and per-model rate limits.
+- Share read-only credential eligibility between account listings and pool counts; expired cooldowns become eligible despite historical errors. Scope account endpoint counts to the requested realm.
+- Preserve readable upstream explanations and record exhausted-pool failures as HTTP 503 in usage logs.
+- Add offline regressions for content rejection, both client protocols, network retry, authentication guards, and account availability. Restart DSH after upgrading; account data requires no migration.
+
 ## 0.2.2 — 2026-09-17
 
 - Persist HTTP 429 / business-code 6004 limits per account and model, using the upstream reset time and UTC offset, then Retry-After, then a configurable 300-second fallback (`WB_RATE_LIMIT_FALLBACK_SECONDS`). Other models remain eligible.
