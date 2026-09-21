@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 — 2026-09-21
+
+- Select the configured realm before the gateway listens, then verify the realm using the launched API key before reporting the gateway as running. Failed confirmation stops the process instead of serving a different region.
+- Store and restore the active realm in the configured account directory. Emit readiness only after the HTTP socket is bound.
+- Cover startup failure, interrupted setup, explicit region overrides, persistence, and a real offline gateway restart.
+- Apply settings synchronously in the host test fixture so disabled autostart cannot launch a real gateway during unit tests.
+
 ## 0.2.3 — 2026-09-19
 
 - Treat a stored domestic check-in as current only when its confirmation date is today; yesterday's status now expires automatically at the local day boundary.

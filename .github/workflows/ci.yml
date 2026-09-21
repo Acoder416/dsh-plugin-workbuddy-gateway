@@ -59,6 +59,9 @@ jobs:
       - name: Bundled account regression tests
         run: npm run test:python
 
+      - name: Gateway startup and realm persistence
+        run: npm run verify:boot
+
   integration:
     name: integration against a real DSH checkout
     runs-on: ubuntu-latest

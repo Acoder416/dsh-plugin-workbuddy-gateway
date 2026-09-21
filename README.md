@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.2.3。** 安装建议固定到 Git 标签 `v0.2.3`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.2.4。** 安装建议固定到 Git 标签 `v0.2.4`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.4"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.2.3 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.4 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -114,6 +114,8 @@ pnpm --dir "$dsh_profile_dir" add "link:$dsh_plugin_dir"
 3. 点击「扫描桌面端账号」并导入，或选择「浏览器授权登录」并完成授权。
 4. 检查账号是否启用、是否有积分。导入后的同步需要上游接口可用；失败时可手动刷新积分或重试签到。
 5. 点击「写入模型路由」（开启自动维护时会自动尝试写入），刷新页面后在 DSH 模型选择器中选择模型。
+
+网关启动和重启时会在监听前应用所选区域，区域确认成功后才显示「运行中」；确认失败会停止网关并显示错误。区域状态保存在账号目录的 `active_realm.json` 中；未指定区域时读取该记录。
 
 ### 积分与签到
 
@@ -186,10 +188,10 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 
 ```sh
 # 升级到本版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.4"
 
 # 回退到已有旧版标签
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 ```
 
 本地 `link:` 方式，在插件源码目录执行：
@@ -197,8 +199,8 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.3
-# 回退时改为：git switch --detach v0.2.2
+git switch --detach v0.2.4
+# 回退时改为：git switch --detach v0.2.3
 ```
 
 如果存在本地修改，先自行保存，避免覆盖。切换版本后重启 DSH 并刷新页面。`link:` 安装的版本由本地目录决定，重新安装其他目录中的副本不会更新正在使用的插件。
