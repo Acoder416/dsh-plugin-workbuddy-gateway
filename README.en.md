@@ -4,7 +4,7 @@ Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model rout
 
 [中文](README.md) | English
 
-**Version: 0.2.3.** Install from the fixed Git tag `v0.2.3`; `v0.2.2` remains available for rollback. No plugin market is required.
+**Version: 0.2.4.** Install from the fixed Git tag `v0.2.4`; `v0.2.3` remains available for rollback. No plugin market is required.
 
 This is an unofficial integration using WorkBuddy subscription endpoints and DSH internal APIs. Those interfaces can change, and using them may violate service terms or trigger account restrictions.
 
@@ -24,7 +24,7 @@ Python detection tries `python`, then `python3` on Windows, and the reverse orde
 Use an existing, initialized web profile:
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.4"
 ```
 
 Then append `dsh-plugin-workbuddy-gateway` to the existing `dsh.profile.bundles` array in the profile's `package.json`. Preserve its other entries. The default profile directory is `~/.dsh/profiles/web`, or `$DSH_HOME/profiles/web` when configured.
@@ -50,7 +50,7 @@ Restart **DSH itself**, then refresh the browser. Restarting only the Python gat
 Keep the checkout in a permanent directory:
 
 ```sh
-git clone --branch v0.2.3 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.2.4 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -90,6 +90,8 @@ Alternatively, after installing the dependency, insert the plugin into the profi
 ## Accounts, credits, and models
 
 Changing realms updates the account list and model catalog. Automatic route maintenance also updates the DSH model picker; otherwise, sync the model route manually. The page shows the selected realm, active gateway realm, and model catalog realm separately. A switch that the running gateway does not confirm is not saved.
+
+On startup and restart, the gateway applies the selected realm before listening and reports running only after confirmation. Failed confirmation stops the gateway and displays an error. The active realm is stored in `active_realm.json` inside the account directory and restored when no realm is selected.
 
 1. Open Settings → WorkBuddy and start the gateway (default `127.0.0.1:18088`).
 2. Select the global or China realm.
@@ -148,9 +150,9 @@ Stop DSH and back up the profile configuration, lockfile, and WorkBuddy state be
 
 ```sh
 # Upgrade
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.4"
 # Roll back
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.2"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.3"
 ```
 
 For a linked checkout:
@@ -158,8 +160,8 @@ For a linked checkout:
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.3
-# To roll back: git switch --detach v0.2.2
+git switch --detach v0.2.4
+# To roll back: git switch --detach v0.2.3
 ```
 
 Preserve local changes before switching. Restart DSH and refresh the browser afterward. A linked installation follows that directory, not another checkout. Code rollback does not undo reward claims, account changes, or model-route writes. Restore your own configuration backup if needed. See [CHANGELOG.md](CHANGELOG.md).

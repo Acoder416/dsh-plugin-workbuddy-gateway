@@ -26,7 +26,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { Gateway, baseUrlFor } from './gateway.js'
+import { Gateway, baseUrlFor, confirmGatewayRealm } from './gateway.js'
 import { mount } from './routes.js'
 import { applyProvider, buildProviderEntry, currentProviderBaseUrl, describeProvider, PI_AI_NAMESPACE } from './provider-route.js'
 import { defineSchema } from './schema.js'
@@ -54,7 +54,7 @@ export const name = 'dsh-plugin-workbuddy-gateway'
 export const inject = ['webServer', 'settings']
 
 /** Plugin build marker, surfaced by `/health` so a stale mount is visible. */
-export const PLUGIN_VERSION = '0.2.3'
+export const PLUGIN_VERSION = '0.2.4'
 
 /**
  * Register the gateway supervisor, its routes, and its settings section.
@@ -131,18 +131,7 @@ export function apply(ctx, config) {
     // A function, not a value: `gatewayDir` is a settings field, so the script
     // path has to be re-derived on every start.
     paths: () => pathsOf(current),
-    onReady: async ({ baseUrl }) => {
-      if (current.realm === null) return
-      const key = await resolveApiKey(ctx)
-      await fetch(`${baseUrl.replace(/\/v1$/, '')}/realm`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...key === null ? {} : { authorization: `Bearer ${key}` },
-        },
-        body: JSON.stringify({ realm: current.realm }),
-      })
-    },
+    onReady: ({ baseUrl, apiKey }) => confirmGatewayRealm({ baseUrl, apiKey, realm: current.realm }),
   })
 
   /** Describe the plugin's own route without changing anything. */

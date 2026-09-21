@@ -36,7 +36,11 @@ function makeHost({ autoStart = false } = {}) {
   }
 
   const settingsService = {
-    installSection: (_owner, _ns, _schema, _entry, hooks) => { state.hooks = hooks },
+    installSection: (_owner, _ns, _schema, _entry, hooks) => {
+      state.hooks = hooks
+      // The host supplies settings synchronously, before autostart is checked.
+      hooks.setSource(() => state.resolved)
+    },
     get: () => state.resolved,
     update: async (_ns, patch) => {
       state.patches.push(patch)
@@ -70,14 +74,20 @@ function makeHost({ autoStart = false } = {}) {
   return { ctx, state, webServer }
 }
 
-/** Mount the plugin and prime the section with its own source thunk. */
+/** Mount the plugin with the host's settings lifecycle. */
 function mountPlugin(options) {
   const host = makeHost(options)
   apply(host.ctx, {})
   assert.ok(host.state.hooks, 'apply() must install the settings section')
-  host.state.hooks.setSource(() => host.state.resolved)
   return host
 }
+
+test('disabled autostart is applied before web routes mount', async () => {
+  const { webServer } = mountPlugin()
+  const reading = await webServer.call(`${ROUTE}/state`)
+  assert.ok(reading.payload.data.gateway.log.some((entry) => entry.text.includes('autostart is off')))
+  assert.equal(reading.payload.data.gateway.state, 'stopped')
+})
 
 test('a committed realm change reaches /state without a remount', async () => {
   const { state, webServer } = mountPlugin()
