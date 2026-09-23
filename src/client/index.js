@@ -112,6 +112,8 @@ window.__ModuleLoader__.load({
         creditBalance: (value) => `${value} 积分`,
         taskClaimed: '积分任务已执行，请刷新积分查看结果。',
         scanNote: '只读取本机 WorkBuddy 桌面端已有的凭证，不会修改它。',
+        scanEmpty: '未找到桌面端凭证。请先登录桌面端后重新扫描，或使用「浏览器授权登录」。',
+        scanEncrypted: '桌面端凭证已加密，无法直接导入。请选择对应区域，使用「浏览器授权登录」添加账号。',
         import: '导入',
         imported: (name) => `已导入 ${name}`,
         remove: '移除',
@@ -225,6 +227,8 @@ window.__ModuleLoader__.load({
         creditBalance: (value) => `${value} credits`,
         taskClaimed: 'Credit tasks ran; refresh credits to see the result.',
         scanNote: 'Reads credentials the local WorkBuddy desktop app already has, and does not modify them.',
+        scanEmpty: 'No desktop credentials found. Sign in to the desktop app and scan again, or use "Sign in via browser".',
+        scanEncrypted: 'Desktop credentials are encrypted and cannot be imported directly. Select the matching region and use "Sign in via browser" to add the account.',
         import: 'Import',
         imported: (name) => `Imported ${name}`,
         remove: 'Remove',
@@ -914,7 +918,8 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'dsw-wb-accountTop' },
                   h('span', { className: 'dsw-wb-accountName' }, textValue(found.nickname, textValue(found.file, '—')))),
                 h('p', { className: 'dsw-wb-note' },
-                  [found.realmName, found.expiresIn === undefined ? null : t.expires(found.expiresIn), found.valid === false ? found.error : null]
+                  [textValue(found.realmName), found.expiresIn == null ? null : t.expires(textValue(found.expiresIn)),
+                    found.valid === false ? (found.errorCode === 'desktop_credentials_encrypted' ? t.scanEncrypted : textValue(found.error)) : null]
                     .filter(Boolean).join(' · ')),
                 h('div', { className: 'dsw-wb-actions' },
                   h('button', {
@@ -926,7 +931,7 @@ window.__ModuleLoader__.load({
                       setScan(null)
                     }, t.imported(textValue(found.nickname, textValue(found.file, 'desktop credential')))),
                   }, t.import)))))
-            : null),
+            : scan !== null ? h('p', { className: 'dsw-wb-notice', role: 'status' }, t.scanEmpty) : null),
 
         // 模型路由。
         h('section', { key: 'providerCard', className: 'dsw-wb-card' },

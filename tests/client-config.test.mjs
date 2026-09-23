@@ -172,6 +172,27 @@ function render(state) {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 
+test('desktop scan explains encrypted credentials and an empty result without hiding settings', async () => {
+  for (const detected of [[], [{ path: 'desktop.info', file: 'desktop.info', valid: false,
+    errorCode: 'desktop_credentials_encrypted', nickname: { $wbEncrypted: 1 } }]]) {
+    const state = stateWith([])
+    const client = loadClient({ state, respond: (url) => ({ ok: true, data: url.endsWith('/accounts/scan')
+      ? { scan: { detected } } : state }) })
+    try {
+      findAll(client.render(), n => n.type === 'button' && /Scan desktop accounts|扫描桌面端账号/.test(textOf(n)))[0].props.onClick()
+      await settle()
+      const tree = client.render()
+      assert.match(textOf(tree), detected.length ? /encrypted|加密/ : /No desktop credentials found|未找到桌面端凭证/)
+      assert.ok(findAll(tree, n => n.props.key === 'providerCard').length)
+      if (detected.length) {
+        const imports = findAll(tree, n => n.type === 'button' && /^(Import|导入)$/.test(textOf(n)))
+        assert.equal(imports.length, 1)
+        assert.equal(imports[0].props.disabled, true)
+      }
+    } finally { client.restore() }
+  }
+})
+
 test('configuration controls apply saved values and submit the displayed port', async () => {
   let saved = stateWith([], { autoStart: true, providerSync: true, realm: 'intl' })
   const patches = []

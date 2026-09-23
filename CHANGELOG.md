@@ -3,7 +3,9 @@
 ## 0.2.5 — 2026-09-23
 
 - Prevent desktop credential scans from returning encrypted nickname objects that crash the settings page. Invalid display metadata now falls back to the credential filename, and the client ignores malformed scan entries instead of rendering objects as React children.
-- Add regressions for encrypted desktop metadata in the scanner and settings renderer.
+- Reject encrypted access/refresh tokens during scanning and import, with guidance to use browser authorization. Scans remain read-only; encrypted data is neither decrypted nor saved as a usable token.
+- Show an explicit message when no desktop credentials are found. Plaintext credential import remains supported, with encrypted display metadata omitted.
+- Align the host and health endpoint version with the package version. Add regressions for encrypted desktop metadata, import rejection, and scan interactions in the settings renderer.
 
 ## 0.2.4 — 2026-09-21
 
