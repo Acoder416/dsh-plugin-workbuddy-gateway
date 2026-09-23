@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.5 — 2026-09-23
+
+- Prevent desktop credential scans from returning encrypted nickname objects that crash the settings page. Invalid display metadata now falls back to the credential filename, and the client ignores malformed scan entries instead of rendering objects as React children.
+- Add regressions for encrypted desktop metadata in the scanner and settings renderer.
+
 ## 0.2.4 — 2026-09-21
 
 - Select the configured realm before the gateway listens, then verify the realm using the launched API key before reporting the gateway as running. Failed confirmation stops the process instead of serving a different region.

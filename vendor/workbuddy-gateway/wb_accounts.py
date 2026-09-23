@@ -947,10 +947,14 @@ def scan_desktop_credentials():
                 found.append(item)
                 continue
             exp = normalize_epoch(auth.get("expiresAt")) or jwt_exp(token) or 0
+            # Some desktop builds store an encrypted metadata envelope in the
+            # nickname field. Keep the read-only scan response JSON-displayable;
+            # the account importer still preserves the credential separately.
+            nickname = profile.get("nickname")
             item.update({
                 "valid": True,
                 "uid": profile.get("uid") or jwt_uid(token),
-                "nickname": profile.get("nickname") or "",
+                "nickname": nickname if isinstance(nickname, str) else "",
                 "domain": auth.get("domain") or cfg["domain"],
                 "expiresAt": exp,
                 "expiresIn": _human_delta(exp - time.time()) if exp else None,

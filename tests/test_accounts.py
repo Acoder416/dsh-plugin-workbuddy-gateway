@@ -222,3 +222,17 @@ class AccountTests(unittest.TestCase):
                 found = accounts.desktop_credential_candidates()
             self.assertEqual(found, [(os.path.join(directory, 'workbuddy-desktop-ai.info'), 'intl'),
                                      (os.path.join(directory, 'workbuddy-desktop.info'), 'cn')])
+
+    def test_desktop_scan_never_returns_object_nickname(self):
+        """Encrypted desktop profile metadata must not break the settings renderer."""
+        with tempfile.TemporaryDirectory() as directory:
+            credential = Path(directory) / 'workbuddy-desktop.info'
+            credential.write_text(json.dumps({
+                'auth': {'accessToken': 'not-a-jwt'},
+                'account': {'uid': 'account-uid', 'nickname': {'$wbEncrypted': 1}},
+            }), encoding='utf-8')
+            with patch.dict(os.environ, {'WORKBUDDY_DESKTOP_AUTH_DIR': directory}):
+                found = accounts.scan_desktop_credentials()
+            self.assertEqual(len(found), 1)
+            self.assertIsInstance(found[0]['nickname'], str)
+            self.assertEqual(found[0]['nickname'], '')

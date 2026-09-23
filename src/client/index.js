@@ -286,6 +286,13 @@ window.__ModuleLoader__.load({
       return COPY_BY_LANGUAGE[LANGUAGE]
     }
 
+    /** Return a value that is safe to place directly in a React text node. */
+    function textValue(value, fallback = '') {
+      if (typeof value === 'string') return value || fallback
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+      return fallback
+    }
+
     /** `12s` / `3m04s` / `2h11m` / `4d03h`. */
     function humanDuration(ms) {
       if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '—'
@@ -898,12 +905,14 @@ window.__ModuleLoader__.load({
           h('p', { className: 'dsw-wb-note' }, t.scanNote),
 
           scan !== null && Array.isArray(scan.detected) && scan.detected.length > 0
-            ? h('div', { className: 'dsw-wb-list' }, scan.detected.map((found) => h('div', {
-                key: found.path,
+            ? h('div', { className: 'dsw-wb-list' }, scan.detected
+              .filter((found) => found !== null && typeof found === 'object')
+              .map((found) => h('div', {
+                key: textValue(found.path, textValue(found.file, 'desktop-credential')),
                 className: 'dsw-wb-account',
               },
                 h('div', { className: 'dsw-wb-accountTop' },
-                  h('span', { className: 'dsw-wb-accountName' }, found.nickname ?? found.file)),
+                  h('span', { className: 'dsw-wb-accountName' }, textValue(found.nickname, textValue(found.file, '—')))),
                 h('p', { className: 'dsw-wb-note' },
                   [found.realmName, found.expiresIn === undefined ? null : t.expires(found.expiresIn), found.valid === false ? found.error : null]
                     .filter(Boolean).join(' · ')),
@@ -915,7 +924,7 @@ window.__ModuleLoader__.load({
                     onClick: () => void run('import', async () => {
                       await postJson('/accounts/import', { path: found.path, realm: found.realm })
                       setScan(null)
-                    }, t.imported(found.nickname ?? found.file)),
+                    }, t.imported(textValue(found.nickname, textValue(found.file, 'desktop credential')))),
                   }, t.import)))))
             : null),
 
