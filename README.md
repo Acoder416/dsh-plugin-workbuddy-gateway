@@ -131,6 +131,8 @@ pnpm --dir "$dsh_profile_dir" add "link:$dsh_plugin_dir"
 
 扫描只识别目录中的 `workbuddy-desktop-ai.info`（国际版）和 `workbuddy-desktop.info`（国内版）。
 
+新版桌面端可能将昵称和登录令牌保存为 `$wbEncrypted` 加密对象。插件会用文件名代替不可读的昵称；登录令牌加密时显示提示并禁用导入。请选择对应区域，点击插件内的「浏览器授权登录」添加账号。插件不解密或修改桌面端文件，也不会读取带时间戳的备份或 `.logged-out` 文件。未找到凭证时会显示提示；明文凭证仍可直接导入。
+
 | 平台 | 默认目录 |
 |---|---|
 | Windows | `%LOCALAPPDATA%/CodeBuddyExtension/Data/Public/auth` |

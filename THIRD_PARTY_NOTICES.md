@@ -20,6 +20,8 @@ upstream license is retained.
 `Copyright (c) 2026` with no name attached, and it is reproduced here exactly as
 received rather than attributed to a name its own text does not state.
 
+**Modifications in 0.2.5.** `wb_accounts.py` omits encrypted display metadata and rejects encrypted access/refresh tokens before import or upstream requests. Scan responses identify encrypted credentials so the client can direct users to browser authorization. Desktop files remain unchanged; offline fixtures cover scanning, import rejection, and plaintext compatibility.
+
 **Modifications in 0.2.4.** `wb_proxy.py` reads the startup realm from `WB_PROXY_REALM` before listening, resolves realm persistence relative to the configured account directory, and announces readiness after binding the HTTP socket.
 
 **Modifications in 0.1.2.** `wb_accounts.py` contains local changes for:

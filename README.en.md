@@ -123,6 +123,8 @@ The desktop app does not need to stay open after import. Logging out of it does 
 
 Only `workbuddy-desktop-ai.info` (global) and `workbuddy-desktop.info` (China) are scanned.
 
+Recent desktop versions can store nicknames and login tokens as `$wbEncrypted` objects. The plugin displays the filename for unreadable nicknames; encrypted tokens produce an explanation and disable import. Select the matching region and use the plugin's **Sign in via browser** action to add the account. The plugin does not decrypt or modify desktop files, and does not read timestamped backups or `.logged-out` files. Empty scans show a message; plaintext credentials remain importable.
+
 | Platform | Default directory |
 |---|---|
 | Windows | `%LOCALAPPDATA%/CodeBuddyExtension/Data/Public/auth` |
