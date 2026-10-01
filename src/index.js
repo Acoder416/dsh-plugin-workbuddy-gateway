@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url'
 
 import { Gateway, baseUrlFor, confirmGatewayRealm } from './gateway.js'
 import { mount } from './routes.js'
-import { applyProvider, buildProviderEntry, currentProviderBaseUrl, describeProvider, PI_AI_NAMESPACE } from './provider-route.js'
+import { applyProvider, buildProviderEntry, currentProviderBaseUrl, describeProvider, readProviderMap, PI_AI_NAMESPACE } from './provider-route.js'
 import { defineSchema } from './schema.js'
 import {
   API_KEY_REF,
@@ -54,7 +54,7 @@ export const name = 'dsh-plugin-workbuddy-gateway'
 export const inject = ['webServer', 'settings']
 
 /** Plugin build marker, surfaced by `/health` so a stale mount is visible. */
-export const PLUGIN_VERSION = '0.2.5'
+export const PLUGIN_VERSION = '0.2.6'
 
 /**
  * Register the gateway supervisor, its routes, and its settings section.
@@ -186,8 +186,8 @@ export function apply(ctx, config) {
       // A port change must not leave a stale endpoint behind. Only the endpoint
       // is corrected here, not the model list, because the gateway may not be
       // running and the list can only come from it.
-      const section = ctx.settings.get(PI_AI_NAMESPACE)
-      const entry = section?.providers?.[PROVIDER_ID]
+      const reading = readProviderMap(ctx.settings)
+      const entry = reading.ok ? reading.providers[PROVIDER_ID] : undefined
       if (entry === undefined || entry === null) return
       await applyProvider({
         settings: ctx.settings,
