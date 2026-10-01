@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.6 — 2026-10-02
+
+- Fix model-route writes against current DSH settings service APIs. The plugin now reads the `llm-pi-ai` entry through `settings.describe()`; clicking 「写入模型路由」 no longer fails with `settings.get is not a function`.
+- Add a regression using a settings service with the current `describe`/`mutate` interface.
+
 ## 0.2.5 — 2026-09-23
 
 - Prevent desktop credential scans from returning encrypted nickname objects that crash the settings page. Invalid display metadata now falls back to the credential filename, and the client ignores malformed scan entries instead of rendering objects as React children.
