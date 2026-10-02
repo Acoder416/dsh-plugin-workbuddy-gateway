@@ -22,7 +22,19 @@ export function sendJson(response, status, payload) {
 export function sameOrigin(request) {
   const origin = request.headers.origin
   const host = request.headers.host
-  if (origin === undefined || host === undefined) return false
+  if (host === undefined) return false
+  // DSH Desktop serves the page from dsh-app://app/ and strips Origin while
+  // forwarding the request to its local HTTP host. The Referer is retained.
+  if (origin === undefined) {
+    const referer = request.headers.referer
+    if (typeof referer !== 'string') return false
+    try {
+      const url = new URL(referer)
+      return url.protocol === 'dsh-app:' && url.hostname === 'app'
+    } catch {
+      return false
+    }
+  }
   try {
     return new URL(origin).host === host
   } catch {
