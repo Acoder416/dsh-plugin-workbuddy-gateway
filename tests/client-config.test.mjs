@@ -59,9 +59,11 @@ function loadClient({ state, respond } = {}) {
   }
 
   const calls = []
+  const requests = []
   globalThis.fetch = async (url, options) => {
     const text = String(url)
     calls.push(text)
+    requests.push({ url: text, options })
     const body = respond ? await respond(text, options) : text.endsWith('/state') && state !== undefined
       ? { ok: true, data: state }
       : { ok: true, data: {} }
@@ -99,6 +101,7 @@ function loadClient({ state, respond } = {}) {
     startPolling: () => effects[1](),
     h,
     calls,
+    requests,
     restore: () => {
       globalThis.window = previousWindow
       globalThis.fetch = previousFetch
@@ -181,6 +184,8 @@ test('desktop scan explains encrypted credentials and an empty result without hi
     try {
       findAll(client.render(), n => n.type === 'button' && /Scan desktop accounts|扫描桌面端账号/.test(textOf(n)))[0].props.onClick()
       await settle()
+      const scanRequest = client.requests.find(({ url }) => url.endsWith('/accounts/scan'))
+      assert.equal(scanRequest?.options?.headers?.['X-DSH-WorkBuddy-Request'], 'desktop')
       const tree = client.render()
       assert.match(textOf(tree), detected.length ? /encrypted|加密/ : /No desktop credentials found|未找到桌面端凭证/)
       assert.ok(findAll(tree, n => n.props.key === 'providerCard').length)

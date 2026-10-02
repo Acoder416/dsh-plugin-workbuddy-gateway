@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9 — 2026-10-03
+
+- Keep Desktop settings actions same-origin after the official bridge removes `Origin` and does not provide a usable `Referer`. The bundled client sends a non-safelisted request marker that the bridge preserves; explicit cross-origin `Origin` values remain rejected.
+- Add regressions for the marker, invalid markers, and the real scan POST request.
+
 ## 0.2.8 — 2026-10-02
 
 - Accept Desktop's explicit `Origin: dsh-app://app` on mutating routes as well as the forwarded request form without `Origin`.
