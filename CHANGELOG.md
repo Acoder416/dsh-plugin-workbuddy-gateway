@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.7 — 2026-10-02
+
+- Allow Desktop mutating requests forwarded from `dsh-app://app` when the desktop bridge strips `Origin` but preserves the app `Referer`.
+- Add a regression for Desktop same-origin validation so reinstalling from the source keeps the fix.
+
 ## 0.2.6 — 2026-10-02
 
 - Fix model-route writes against current DSH settings service APIs. The plugin now reads the `llm-pi-ai` entry through `settings.describe()`; clicking 「写入模型路由」 no longer fails with `settings.get is not a function`.
