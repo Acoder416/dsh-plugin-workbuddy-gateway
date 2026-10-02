@@ -12,6 +12,15 @@ test('Desktop requests without Origin are accepted from dsh-app://app', () => {
   }), true)
 })
 
+test('Desktop requests with the app Origin are accepted', () => {
+  assert.equal(sameOrigin({
+    headers: {
+      host: '127.0.0.1:3080',
+      origin: 'dsh-app://app',
+    },
+  }), true)
+})
+
 test('missing Origin without the Desktop app referer is rejected', () => {
   assert.equal(sameOrigin({ headers: { host: '127.0.0.1:3080' } }), false)
 })

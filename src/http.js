@@ -23,6 +23,9 @@ export function sameOrigin(request) {
   const origin = request.headers.origin
   const host = request.headers.host
   if (host === undefined) return false
+  // Some Desktop forwarding paths preserve the app Origin instead of
+  // removing it before reaching the local HTTP host.
+  if (origin === 'dsh-app://app') return true
   // DSH Desktop serves the page from dsh-app://app/ and strips Origin while
   // forwarding the request to its local HTTP host. The Referer is retained.
   if (origin === undefined) {
