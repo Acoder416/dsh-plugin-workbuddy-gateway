@@ -453,7 +453,14 @@ window.__ModuleLoader__.load({
     async function postJson(path, body) {
       const response = await fetch(`${BASE}${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        // The official Desktop bridge strips Origin before forwarding to the
+        // local plugin server. This non-safelisted marker survives that hop,
+        // so the host can still distinguish the plugin's own requests from
+        // cross-site form submissions.
+        headers: {
+          'content-type': 'application/json',
+          'X-DSH-WorkBuddy-Request': 'desktop',
+        },
         body: JSON.stringify(body ?? {}),
       })
       const payload = await response.json().catch(() => null)
