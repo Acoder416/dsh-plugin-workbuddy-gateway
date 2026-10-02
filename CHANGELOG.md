@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.8 — 2026-10-02
+
+- Accept Desktop's explicit `Origin: dsh-app://app` on mutating routes as well as the forwarded request form without `Origin`.
+- Add a regression for the explicit Desktop app origin reported by the installed Desktop client.
+
 ## 0.2.7 — 2026-10-02
 
 - Allow Desktop mutating requests forwarded from `dsh-app://app` when the desktop bridge strips `Origin` but preserves the app `Referer`.
