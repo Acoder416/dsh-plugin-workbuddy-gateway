@@ -1,24 +1,12 @@
 # Changelog
 
-## 0.2.9 — 2026-10-03
+## 0.2.6 — 2026-10-03
 
-- Keep Desktop settings actions same-origin after the official bridge removes `Origin` and does not provide a usable `Referer`. The bundled client sends a non-safelisted request marker that the bridge preserves; explicit cross-origin `Origin` values remain rejected.
-- Add regressions for the marker, invalid markers, and the real scan POST request.
-
-## 0.2.8 — 2026-10-02
-
-- Accept Desktop's explicit `Origin: dsh-app://app` on mutating routes as well as the forwarded request form without `Origin`.
-- Add a regression for the explicit Desktop app origin reported by the installed Desktop client.
-
-## 0.2.7 — 2026-10-02
-
-- Allow Desktop mutating requests forwarded from `dsh-app://app` when the desktop bridge strips `Origin` but preserves the app `Referer`.
-- Add a regression for Desktop same-origin validation so reinstalling from the source keeps the fix.
-
-## 0.2.6 — 2026-10-02
-
-- Fix model-route writes against current DSH settings service APIs. The plugin now reads the `llm-pi-ai` entry through `settings.describe()`; clicking 「写入模型路由」 no longer fails with `settings.get is not a function`.
-- Add a regression using a settings service with the current `describe`/`mutate` interface.
+- Fix model-route writes against current DSH settings service APIs by reading the `llm-pi-ai` entry through `settings.describe()` and retaining path-level `settings.mutate()` writes.
+- Keep Desktop settings actions working through every official bridge path: accept the explicit `Origin: dsh-app://app`, the older app `Referer` fallback, and the final forwarded form where the bridge removes both `Origin` and `Referer` by sending a preserved client request marker.
+- Keep explicit cross-origin origins, missing markers, invalid markers, and missing hosts rejected.
+- Preserve the encrypted desktop-credential scan safeguards: malformed display metadata falls back to the credential filename, encrypted tokens are never imported, and the settings page shows actionable guidance instead of rendering malformed entries.
+- Add regressions for settings API writes, all Desktop same-origin forms, invalid request markers, and the real desktop scan POST request.
 
 ## 0.2.5 — 2026-09-23
 
