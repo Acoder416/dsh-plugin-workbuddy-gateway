@@ -101,11 +101,21 @@ On startup and restart, the gateway applies the selected realm before listening 
 
 Desktop imports attempt CN daily check-in before reading credits; global imports only read credits. Synchronization requires working upstream endpoints. Retry the relevant action if it fails.
 
+With **Start with dsh** enabled, the gateway automatically checks in enabled CN accounts about ten seconds after startup, without opening settings. Successful check-ins refresh credits and persist the local calendar date, so restarting DSH on the same day skips confirmed accounts. Disabled and global accounts do not check in. Failed attempts remain eligible on the next startup or existing scheduled cycle; manual check-in is also available. Working network access and valid credentials are required. The existing periodic schedule continues while the gateway runs.
+
 **Refresh credits** reads the balance. Upstream values are kept to two decimals, and expired packages are excluded from the usable total. **Check in** invokes the CN daily reward endpoint. Upstream code `10001`, including in an HTTP error response, means the reward was already claimed. The account card shows the last stored confirmation and timestamp. For the China realm, the gateway compares that timestamp with the local date, so yesterday's or older record automatically appears as not checked in today. Reading the page does not make another upstream request; use Check in when you need an immediate confirmation.
 
 Refreshing credits queries the upstream live, once per account, and retries before reporting a result. **Refresh all credits** can therefore take a while and may fail when there are several accounts or the network is poor — for example when the global realm is reached through a proxy. To refresh one account, use **Refresh credits** on its card.
 
 **Claim credits** invokes the bundled gateway's growth-task workflow, separate from daily check-in. It depends on upstream activity endpoints and does not guarantee rewards.
+
+**Automatic growth check-in (CN personal accounts)** is an independent, opt-in switch in the account section. Startup and subsequent background checks read the official current-day activity record. An inactive account submits one chat activity event, then verifies the result. Only an official `is_active: true` for today's date confirms completion. This does not call a model or automatically redeem rewards, spend makeup cards, or draw prizes. Only enabled, signed-in CN personal accounts participate; accounts already active in the official client skip the report.
+
+The activity calendar uses Asia/Shanghai. Admission is saved before sending, allowing at most one report per account per day across restarts, including uncertain network outcomes. Unconfirmed activity gets up to three verification rounds by default, five minutes apart, then displays the failure reason and stops checking for that day. Disabling the switch or stopping the gateway prevents subsequent requests; already-sent requests cannot be recalled. Network, credentials, or upstream changes can prevent confirmation.
+
+The `workbuddy-gateway` settings namespace exposes `autoGrowthCheckin` (default `false`), `growthCheckinRetrySeconds` (default `300`, range `30–3600`), and `growthCheckinMaxChecks` (default `3`, range `1–10`). The settings-page switch updates the running bundled gateway; file edits apply on restart. Upgrade the plugin and restart DSH for this feature. A custom `gatewayDir` must also implement its scheduler endpoint.
+
+The plugin supports current profile Config forms and legacy settings sections. Current DSH persists changes in the profile's `cordis.patch.yml`. Developers can run `node --expose-internals tests/integration-growth-settings.mjs <built-DSH-checkout>` against a disposable profile; this check does not launch a Web server or read real accounts.
 
 Without a session binding, the gateway rotates across available accounts in the same realm. Bound sessions prefer their existing account. HTTP 429 or upstream business code 6004 records a restriction for that account and model, then tries another eligible account in the same realm. Other models remain eligible. Reaching the deadline permits another attempt; it does not guarantee upstream acceptance. A positive credit balance does not rule out a model frequency limit.
 

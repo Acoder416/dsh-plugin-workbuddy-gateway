@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in CN personal-account growth check-in, with an independent switch and localized confirmation/failure status. Query official current-day activity before reporting, and confirm completion only from the official activity record.
+- Persist report admission before sending, enforce the Shanghai day boundary, and limit verification retries across restarts and credential reimports. Unknown report outcomes are not resent. Preserve existing billing check-in behavior.
+- Support current DSH profile Config forms while retaining legacy settings sections. Verify live updates with the real current Loader and settings services, and wait for gateway shutdown during plugin disposal.
+
+- Repair startup daily check-in by using the account adapter’s persisted local-day confirmation instead of calling an absent method. Skip disabled accounts and overlapping scheduler cycles, refresh credits after success, and keep credit or travel failures from preventing later accounts’ check-ins.
+- Cancel the initial background wait on shutdown. Add offline startup, restart, next-day, retry, eligibility, and overlapping-trigger regressions.
+
 ## 0.2.6 — 2026-10-03
 
 - Fix model-route writes against current DSH settings service APIs by reading the `llm-pi-ai` entry through `settings.describe()` and retaining path-level `settings.mutate()` writes.

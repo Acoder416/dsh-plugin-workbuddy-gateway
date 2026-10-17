@@ -47,6 +47,9 @@ import {
  */
 const SECTION_SCHEMA = defineSchema(SETTINGS_BASE, (candidate) => normalizeSettings(candidate))
 
+/** Live profile configuration for current DSH; legacy settings keep their own section. */
+export const Config = defineSchema(SETTINGS_BASE, normalizeSettings, { volatile: true })
+
 /** Cordis plugin name. */
 export const name = 'dsh-plugin-workbuddy-gateway'
 
@@ -63,6 +66,8 @@ export const PLUGIN_VERSION = '0.2.6'
  * @param {object} [config] - loader config; composition defaults for the section.
  */
 export function apply(ctx, config) {
+  const readConfig = () => typeof config?.get === 'function' ? config.get() : config
+  let settingsNamespace = SETTINGS_NAMESPACE
   const root = dirname(fileURLToPath(import.meta.url))
   const vendorDir = resolve(root, '..', 'vendor', 'workbuddy-gateway')
   const dshHome = process.env.DSH_HOME !== undefined && process.env.DSH_HOME !== ''
@@ -79,7 +84,7 @@ export function apply(ctx, config) {
    * mount time: the realm picker never echoed a switch, the account and model
    * reads kept querying the old realm, and the CN-only buttons never appeared.
    */
-  let readSettings = () => ({ ...SETTINGS_BASE, ...config })
+  let readSettings = () => ({ ...SETTINGS_BASE, ...readConfig() })
 
   /** Current resolved settings; re-derived on attach and on every committed change. */
   let current = normalizeSettings(readSettings())
@@ -204,11 +209,21 @@ export function apply(ctx, config) {
   // `current.autoStart`, and a reversed order would compare the composition
   // default instead of the user's choice.
   ctx.inject(['settings'], (settingsCtx) => {
+    if (typeof settingsCtx.settings.installSection !== 'function') {
+      settingsNamespace = ctx.fiber.entry?.options.id ?? SETTINGS_NAMESPACE
+      settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
+      ctx.on('loader/volatile-update', () => {
+        syncCurrent()
+        if (current.providerSync) void refreshBaseUrl()
+      })
+      syncCurrent()
+      return
+    }
     settingsCtx.settings.installSection(
       ctx,
       SETTINGS_NAMESPACE,
       SECTION_SCHEMA,
-      { ...SETTINGS_BASE, ...config },
+      { ...SETTINGS_BASE, ...readConfig() },
       {
         setSource: (source) => {
           readSettings = source
@@ -238,7 +253,7 @@ export function apply(ctx, config) {
         // `update` merges a partial patch into this namespace's user layer. The
         // namespace is already registered by `installSection`, so registering
         // again here would throw.
-        await webCtx.settings.update(SETTINGS_NAMESPACE, patch)
+        await webCtx.settings.update(settingsNamespace, patch)
         // Re-derive before this request's own snapshot runs. The scope watcher
         // that also does it is not ordered against this await, and a realm switch
         // that still read the old realm would answer with the previous region's
@@ -264,9 +279,7 @@ export function apply(ctx, config) {
     // stopped if this plugin started it: adopting a pre-existing server on the
     // port is not possible (there is no way to know who owns it), so the plugin
     // treats "port already serving" as a start failure and says so.
-    webCtx.effect(() => () => {
-      void gateway.stop()
-    }, 'dsh-plugin-workbuddy-gateway: gateway shutdown')
+    webCtx.effect(() => () => gateway.stop(), 'dsh-plugin-workbuddy-gateway: gateway shutdown')
 
     if (!current.autoStart) {
       gateway.note('log', 'autostart is off; the gateway stays stopped until you start it here')

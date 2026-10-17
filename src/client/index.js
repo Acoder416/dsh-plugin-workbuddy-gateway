@@ -105,6 +105,12 @@ window.__ModuleLoader__.load({
         checkin: '签到',
         checkedIn: (time) => `已签到${time ? ` · ${time}` : ''}`,
         notCheckedIn: '未签到',
+        autoGrowthCheckin: '自动成长打卡（国内个人账号）',
+        growthNote: '启动后自动检查；每天最多上报一次活跃，官方确认后才显示已打卡。开启后在下一轮后台检查生效。',
+        growthOff: '成长打卡：自动已关闭',
+        growthUnsupported: '成长打卡：企业账号不适用',
+        growthStates: { not_started: '成长打卡：今日尚未检查', pending: '成长打卡：待官方确认', confirmed: '成长打卡：今日已确认', failed: '成长打卡：今日未确认，自动检查已停止' },
+        growthReasons: { not_recorded: '官方尚未计入', request_failed: '网络请求失败', auth_required: '请重新登录账号', upstream_rejected: '官方接口拒绝请求', invalid_response: '官方返回格式或日期不符合预期', invalid_state: '本地打卡记录异常，请检查账号文件', storage_failed: '打卡记录保存失败，请检查磁盘或文件权限' },
         enableAll: '全部启用',
         disableAll: '全部停用',
         enable: '启用',
@@ -220,6 +226,12 @@ window.__ModuleLoader__.load({
         checkin: 'Check in',
         checkedIn: (time) => `Checked in${time ? ` · ${time}` : ''}`,
         notCheckedIn: 'Not checked in',
+        autoGrowthCheckin: 'Automatic growth check-in (CN personal accounts)',
+        growthNote: 'Checks on startup; reports activity at most once a day and requires official confirmation. Changes apply on the next background check.',
+        growthOff: 'Growth check-in: automation off',
+        growthUnsupported: 'Growth check-in: unavailable for enterprise accounts',
+        growthStates: { not_started: 'Growth check-in: not checked today', pending: 'Growth check-in: awaiting official confirmation', confirmed: 'Growth check-in: confirmed today', failed: 'Growth check-in: unconfirmed today; automatic checks stopped' },
+        growthReasons: { not_recorded: 'Not recorded by the official service yet', request_failed: 'Network request failed', auth_required: 'Sign in to the account again', upstream_rejected: 'The official service rejected the request', invalid_response: 'Unexpected official response or calendar date', invalid_state: 'Invalid local activity record; check the account file', storage_failed: 'Could not save activity; check disk space and file permissions' },
         enableAll: 'Enable all',
         disableAll: 'Disable all',
         enable: 'Enable',
@@ -839,6 +851,18 @@ window.__ModuleLoader__.load({
             action(t.enableAll, () => void run('enable-all', () => postJson('/accounts/set-all', { enabled: true }), t.saved), undefined),
             action(t.disableAll, () => void run('disable-all', () => postJson('/accounts/set-all', { enabled: false }), t.saved), undefined)),
 
+          h('label', { className: 'dsw-wb-check' },
+            h('input', {
+              type: 'checkbox',
+              checked: settings.autoGrowthCheckin === true,
+              disabled: busy !== null,
+              onChange: (event) => void run('config', async () => {
+                const result = await postJson('/config', { autoGrowthCheckin: event.target.checked })
+                applyConfigResult(result)
+              }),
+            }), t.autoGrowthCheckin),
+          h('p', { className: 'dsw-wb-note' }, t.growthNote),
+
           // 区域选择放在这张卡片里而不是网关卡片：它过滤的正是下面这张账号列表。
           h('div', { className: 'dsw-wb-field' },
             h('span', { className: 'dsw-wb-label' }, t.realm),
@@ -886,6 +910,13 @@ window.__ModuleLoader__.load({
                   [entry.realmName ?? entry.realm, entry.expiresIn === undefined ? null : t.expires(entry.expiresIn),
                     entry.credits?.remain === undefined ? null : t.creditBalance(entry.credits.remain)]
                     .filter(Boolean).join(' · ')),
+                entry.realm === 'cn'
+                  ? h('p', { className: 'dsw-wb-note', 'data-growth-status': entry.growthCheckin?.status ?? 'not_started' },
+                      entry.enterpriseId ? t.growthUnsupported
+                        : entry.growthCheckin?.status !== 'confirmed' && settings.autoGrowthCheckin !== true ? t.growthOff
+                        : [t.growthStates[entry.growthCheckin?.status] ?? t.growthStates.not_started,
+                            t.growthReasons[entry.growthCheckin?.reason]].filter(Boolean).join(' · '))
+                  : null,
                 ...Object.entries(entry.modelRateLimits ?? {})
                   .filter(([, resetAt]) => typeof resetAt === 'number' && Number.isFinite(resetAt) && resetAt * 1000 > Date.now())
                   .map(([model, resetAt]) => h('p', { key: `limit-${model}`, className: 'dsw-wb-note' },

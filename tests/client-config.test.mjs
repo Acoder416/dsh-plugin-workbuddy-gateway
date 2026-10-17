@@ -175,6 +175,42 @@ function render(state) {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve))
 
+test('growth activity confirmation is separate from billing check-in in the account card', () => {
+  const now = new Date()
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  for (const [status, expected] of [['pending', /awaiting official|待官方确认/],
+    ['confirmed', /confirmed today|今日已确认/], ['failed', /unconfirmed today|今日未确认/]]) {
+    const { text } = render(stateWith([{ uid: 'cn', realm: 'cn', enabled: true,
+      checkinClaimed: true, lastCheckin: `${date} 08:00:00`,
+      growthCheckin: { status, reason: status === 'failed' ? 'not_recorded' : '' } }],
+    { autoGrowthCheckin: true }))
+    assert.match(text, expected)
+    assert.match(text, /Checked in|已签到/)
+  }
+})
+
+test('the independent growth checkbox saves and displays the confirmed setting', async () => {
+  let state = stateWith([], { autoGrowthCheckin: false })
+  const client = loadClient({ state, respond: (url, options) => {
+    if (url.endsWith('/config')) {
+      assert.deepEqual(JSON.parse(options.body), { autoGrowthCheckin: true })
+      state = { ...state, settings: { ...state.settings, autoGrowthCheckin: true } }
+      return { ok: true, data: { settings: state.settings, gateway: state.gateway } }
+    }
+    return { ok: true, data: state }
+  } })
+  try {
+    const findSwitch = () => {
+      const label = findAll(client.render(), n => n.type === 'label' && /Automatic growth|自动成长打卡/.test(textOf(n)))[0]
+      return findAll(label, n => n.type === 'input')[0]
+    }
+    assert.equal(findSwitch().props.checked, false)
+    findSwitch().props.onChange({ target: { checked: true } })
+    await settle()
+    assert.equal(findSwitch().props.checked, true)
+  } finally { client.restore() }
+})
+
 test('desktop scan explains encrypted credentials and an empty result without hiding settings', async () => {
   for (const detected of [[], [{ path: 'desktop.info', file: 'desktop.info', valid: false,
     errorCode: 'desktop_credentials_encrypted', nickname: { $wbEncrypted: 1 } }]]) {
