@@ -79,6 +79,15 @@ try {
     const health = await fetch(`${reading.baseUrl.replace(/\/v1$/, '')}/health`, { signal: AbortSignal.timeout(5000) })
     check('the gateway answers /health', health.ok, `HTTP ${String(health.status)}`)
     await health.arrayBuffer()
+    const growthUrl = `${reading.baseUrl.replace(/\/v1$/, '')}/scheduler/growth`
+    const policy = { enabled: true, retrySeconds: 60, maxChecks: 2 }
+    const rejected = await fetch(growthUrl, { method: 'POST', body: JSON.stringify(policy), signal: AbortSignal.timeout(5000) })
+    check('growth policy rejects unauthenticated writes', rejected.status === 401)
+    await rejected.arrayBuffer()
+    const changed = await fetch(growthUrl, { method: 'POST', body: JSON.stringify(policy),
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(5000) })
+    const applied = await changed.json()
+    check('growth policy is applied to the running scheduler', changed.ok && Object.keys(policy).every(key => applied[key] === policy[key]))
     check('the confirmed realm is saved in the configured account store', JSON.parse(readFileSync(realmFile)).realm === 'cn')
     realm = null
     const restarted = await gateway.restart({ apiKey })

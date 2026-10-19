@@ -2376,6 +2376,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, SCHEDULER.trigger_now())
             return self._json(200, {"ok": False, "msg": "调度器未初始化"})
 
+        if path == "/scheduler/growth":
+            if not SCHEDULER:
+                return self._error(503, "scheduler unavailable")
+            try:
+                config = SCHEDULER.growth.configure(payload.get("enabled"),
+                                                   payload.get("retrySeconds"), payload.get("maxChecks"))
+            except ValueError as exc:
+                return self._error(400, str(exc), "invalid_request_error")
+            return self._json(200, config)
+
         if path == "/scheduler/toggle":
             if SCHEDULER:
                 SCHEDULER.enabled = not SCHEDULER.enabled

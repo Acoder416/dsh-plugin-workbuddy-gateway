@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from wb_fingerprint import derive_id, generate_request_id
+from wb_growth import public_state as growth_public_state
 
 
 def _retryable(exc):
@@ -256,6 +257,7 @@ class Account(object):
         self.credits = data.get("credits") or None
         self.last_checkin = data.get("lastCheckin") or None
         self.checkin_claimed = data.get("checkinClaimed")
+        self.growth_checkin = data.get("growthCheckin")
 
     def to_dict(self):
         return {
@@ -277,6 +279,7 @@ class Account(object):
             "credits": self.credits,
             "lastCheckin": self.last_checkin,
             "checkinClaimed": self.checkin_claimed,
+            "growthCheckin": self.growth_checkin,
         }
 
     def public(self):
@@ -304,6 +307,7 @@ class Account(object):
             "lastCheckin": self.last_checkin,
             "checkinClaimed": self.checkin_claimed_today() if self.realm == "cn" else None,
             "canCheckin": self.realm == "cn",
+            "growthCheckin": growth_public_state(self.growth_checkin) if self.realm == "cn" else None,
             "machineId": derive_id(self.uid, "machine"),
             "sessionId": derive_id(self.uid, "session"),
         }
@@ -669,6 +673,8 @@ class AccountPool(object):
                     account.credits = existing.credits
                 if not account.last_checkin and existing.last_checkin:
                     account.last_checkin = existing.last_checkin
+                if account.growth_checkin is None:
+                    account.growth_checkin = existing.growth_checkin
                 if not account.model_rate_limits and existing.model_rate_limits:
                     account.model_rate_limits = dict(existing.model_rate_limits)
                 self.accounts[self.accounts.index(existing)] = account

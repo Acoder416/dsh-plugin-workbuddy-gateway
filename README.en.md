@@ -4,7 +4,7 @@ Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model rout
 
 [中文](README.md) | English
 
-**Version: 0.2.6.** Install from the fixed Git tag `v0.2.6`; `v0.2.5` remains available for rollback. No plugin market is required.
+**Version: 0.3.0.** Supports the current Config-based Settings API, verified against the official Windows DSH `0.2.1-rc.2` installation for settings edits, provider writes and restart persistence. Install from the fixed Git tag `v0.3.0`. No plugin market is required.
 
 This is an unofficial integration using WorkBuddy subscription endpoints and DSH internal APIs. Those interfaces can change, and using them may violate service terms or trigger account restrictions.
 
@@ -24,7 +24,7 @@ Python detection tries `python`, then `python3` on Windows, and the reverse orde
 Use an existing, initialized web profile:
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
 ```
 
 Then append `dsh-plugin-workbuddy-gateway` to the existing `dsh.profile.bundles` array in the profile's `package.json`. Preserve its other entries. The default profile directory is `~/.dsh/profiles/web`, or `$DSH_HOME/profiles/web` when configured.
@@ -50,7 +50,7 @@ Restart **DSH itself**, then refresh the browser. Restarting only the Python gat
 Keep the checkout in a permanent directory:
 
 ```sh
-git clone --branch v0.2.6 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.3.0 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -101,11 +101,23 @@ On startup and restart, the gateway applies the selected realm before listening 
 
 Desktop imports attempt CN daily check-in before reading credits; global imports only read credits. Synchronization requires working upstream endpoints. Retry the relevant action if it fails.
 
+With **Start with dsh** enabled, the gateway automatically checks in enabled CN accounts about ten seconds after startup, without opening settings. Successful check-ins refresh credits and persist the local calendar date, so restarting DSH on the same day skips confirmed accounts. Disabled and global accounts do not check in. Failed attempts remain eligible on the next startup or existing scheduled cycle; manual check-in is also available. Working network access and valid credentials are required. The existing periodic schedule continues while the gateway runs.
+
 **Refresh credits** reads the balance. Upstream values are kept to two decimals, and expired packages are excluded from the usable total. **Check in** invokes the CN daily reward endpoint. Upstream code `10001`, including in an HTTP error response, means the reward was already claimed. The account card shows the last stored confirmation and timestamp. For the China realm, the gateway compares that timestamp with the local date, so yesterday's or older record automatically appears as not checked in today. Reading the page does not make another upstream request; use Check in when you need an immediate confirmation.
 
 Refreshing credits queries the upstream live, once per account, and retries before reporting a result. **Refresh all credits** can therefore take a while and may fail when there are several accounts or the network is poor — for example when the global realm is reached through a proxy. To refresh one account, use **Refresh credits** on its card.
 
 **Claim credits** invokes the bundled gateway's growth-task workflow, separate from daily check-in. It depends on upstream activity endpoints and does not guarantee rewards.
+
+**Automatic growth check-in (CN personal accounts)** is an independent, opt-in switch in the account section. Startup and subsequent background checks read the official current-day activity record. An inactive account submits one chat activity event, then verifies the result. Only an official `is_active: true` for today's date confirms completion. This does not call a model or automatically redeem rewards, spend makeup cards, or draw prizes. Only enabled, signed-in CN personal accounts participate; accounts already active in the official client skip the report.
+
+The activity calendar uses Asia/Shanghai. Admission is saved before sending, allowing at most one report per account per day across restarts, including uncertain network outcomes. Unconfirmed activity gets up to three verification rounds by default, five minutes apart, then displays the failure reason and stops checking for that day. Disabling the switch or stopping the gateway prevents subsequent requests; already-sent requests cannot be recalled. Network, credentials, or upstream changes can prevent confirmation.
+
+The `workbuddy-gateway` settings namespace exposes `autoGrowthCheckin` (default `false`), `growthCheckinRetrySeconds` (default `300`, range `30–3600`), and `growthCheckinMaxChecks` (default `3`, range `1–10`). The settings-page switch updates the running bundled gateway; file edits apply on restart. Upgrade the plugin and restart DSH for this feature. A custom `gatewayDir` must also implement its scheduler endpoint.
+
+The plugin supports current profile Config forms and legacy settings sections. Current hosts use the exported volatile `Config` and `settings.configure()`, address edits by the actual plugin entry id, and persist changes in the profile's `cordis.patch.yml`. Only legacy hosts that provide `installSection()` use that API. The configuration listener belongs to the plugin instance and is not duplicated when Settings is replaced.
+
+From the checkout, run `node scripts/verify-profile-settings.mjs <built-dsh-CLI.js-or-Desktop-dsh.cmd>` to check actual host loading, HTTP settings edits, external edits, provider writes and restart persistence. The check uses a temporary profile, temporary HTTP port and empty credentials. It does not start the gateway, read real accounts or call a model.
 
 Without a session binding, the gateway rotates across available accounts in the same realm. Bound sessions prefer their existing account. HTTP 429 or upstream business code 6004 records a restriction for that account and model, then tries another eligible account in the same realm. Other models remain eligible. Reaching the deadline permits another attempt; it does not guarantee upstream acceptance. A positive credit balance does not rule out a model frequency limit.
 
@@ -151,10 +163,10 @@ The gateway API key is stored in DSH's credential store as `WORKBUDDY_API_KEY`. 
 Stop DSH and back up the profile configuration, lockfile, and WorkBuddy state before upgrading. Backups contain credentials and must stay private.
 
 ```sh
-# Install the final merged build
+# Install the current version
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
+# Roll back only on a host that still provides the legacy Settings API
 dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
-# Roll back
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.5"
 ```
 
 For a linked checkout:
@@ -162,11 +174,11 @@ For a linked checkout:
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.6
-# To roll back: git switch --detach v0.2.5
+git switch --detach v0.3.0
+# To roll back on a legacy host: git switch --detach v0.2.6
 ```
 
-Preserve local changes before switching. Restart DSH and refresh the browser afterward. A linked installation follows that directory, not another checkout. Code rollback does not undo reward claims, account changes, or model-route writes. Restore your own configuration backup if needed. See [CHANGELOG.md](CHANGELOG.md).
+Preserve local changes before switching. Restart DSH and refresh the browser afterward. A linked installation follows that directory, not another checkout. Keep `v0.3.0` on DSH `0.2.1-rc.2`: that host does not provide the legacy Settings API used by `v0.2.6`. Code rollback does not undo reward claims, account changes, or model-route writes. Restore your own configuration backup if needed. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Troubleshooting and removal
 

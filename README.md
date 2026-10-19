@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.2.6。** 安装建议固定到 Git 标签 `v0.2.6`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.3.0。** 已适配新版 Config 设置接口，并通过 Windows 官方安装版 DSH `0.2.1-rc.2` 的配置读写、模型路由及重启验证。安装请固定到 Git 标签 `v0.3.0`。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.2.6 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.3.0 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -119,6 +119,8 @@ pnpm --dir "$dsh_profile_dir" add "link:$dsh_plugin_dir"
 
 ### 积分与签到
 
+开启「随 dsh 启动」后，网关启动约 10 秒会自动为已启用的国内版账号签到，无需打开设置页。签到成功后刷新积分，并保存当天记录；同一天重新打开 DSH 会跳过已签到账号。日期按电脑本地时间计算，国际版和停用账号不参与。失败不会标记为已签到，下次启动或既有定时巡检会重试，也可手动签到；网络和登录凭证需要有效。网关持续运行时还会按既有排程巡检。
+
 「刷新积分」查询余额；上游下发的精确值保留到小数点后两位，已失效的资源包不计入可用余额。「签到」调用国内版每日领取接口。上游返回 `code: 10001`（包括 HTTP 错误响应）时，表示当天已经领取，插件也会保存该结果。
 
 刷新积分需要实时请求上游，每个账号一次，连接不稳定时会先重试再返回结果。因此「刷新全部积分」在账号较多或网络较差时（例如经由代理访问国际版）可能要等待较久，也可能失败；只关心一个账号时，用账号卡片上的「刷新积分」。
@@ -126,6 +128,18 @@ pnpm --dir "$dsh_profile_dir" add "link:$dsh_plugin_dir"
 账号卡片显示的是最近保存的领取状态和确认时间；国内版会按本地日期判断，昨天或更早的记录在今天自动显示为「未签到」，不会跨天沿用。页面读取本地状态不会额外请求上游；需要立即确认时点击签到。国际版不提供此签到功能。
 
 「领取积分」会调用内置网关的成长任务流程，与每日签到是不同操作。它依赖上游活动接口，耗时和可用性可能变化；失败时查看操作提示，不保证获得积分。
+
+### 自动成长打卡
+
+在账号区开启「自动成长打卡（国内个人账号）」后，网关在启动巡检和后续后台检查中查询官方当天活跃记录；尚未活跃时上报一次聊天活跃事件，再查询官方是否计入。只有官方返回当天 `is_active: true` 才显示「今日已确认」。它与每日积分签到分别记录，不调用模型，也不自动兑换奖励、使用补签卡或抽奖。默认关闭，只处理已启用、已登录的国内个人账号。
+
+日期按北京时间计算。每个账号每天最多上报一次，发送前保存记录；即使请求超时或重启，也只继续核验，不重复上报。默认最多检查三轮，未确认时每隔五分钟重新检查；全部失败后显示原因并停止当天自动检查。关闭开关或停止网关会阻止后续请求，已经发送的请求不能撤回。官方接口变化、网络或凭证问题可能使打卡无法确认。当天已在官方客户端完成活跃的账号直接确认并跳过上报。
+
+设置保存在 `workbuddy-gateway` 命名空间：`autoGrowthCheckin` 是独立开关；`growthCheckinRetrySeconds` 默认 `300`，范围 `30–3600`；`growthCheckinMaxChecks` 默认 `3`，范围 `1–10`。设置页切换开关立即更新运行中的内置网关；直接修改配置文件在重启后应用。新功能需要更新插件并重启 DSH；自定义 `gatewayDir` 也必须提供相应调度接口。
+
+插件兼容新版 DSH 的 profile Config 表单和旧版设置分区。新版通过导出的 volatile `Config` 和 `settings.configure()` 注册页面，按实际插件 entry id 更新配置，并将设置写入当前 profile 的 `cordis.patch.yml`；只有提供 `installSection()` 的旧宿主才使用该接口。配置监听跟随插件实例，在设置服务替换时不会重复注册。
+
+在源码目录运行 `node scripts/verify-profile-settings.mjs <已构建的dsh-CLI.js或桌面版dsh.cmd路径>` 可验证真实宿主的加载、HTTP 配置读写、外部修改、模型路由和重启恢复。测试使用临时 profile、临时 HTTP 端口和空凭据，不启动网关、不读取真实账号，也不调用模型。
 
 ### 桌面端凭证目录
 
@@ -189,11 +203,11 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 直接安装方式：
 
 ```sh
-# 安装最终版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
+# 安装当前版本
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
 
-# 回退到上一版标签
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.5"
+# 回退（仅适用于仍提供旧设置接口的 DSH）
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
 ```
 
 本地 `link:` 方式，在插件源码目录执行：
@@ -201,13 +215,13 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.6
-# 回退时改为：git switch --detach v0.2.5
+git switch --detach v0.3.0
+# 旧宿主回退时改为：git switch --detach v0.2.6
 ```
 
 如果存在本地修改，先自行保存，避免覆盖。切换版本后重启 DSH 并刷新页面。`link:` 安装的版本由本地目录决定，重新安装其他目录中的副本不会更新正在使用的插件。
 
-回退代码不会撤销积分领取、还原账号操作或自动恢复模型路由。需要恢复配置时使用自己的备份。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
+DSH `0.2.1-rc.2` 不支持 `v0.2.6` 使用的旧设置接口，请保留 `v0.3.0`。回退代码不会撤销积分领取、还原账号操作或自动恢复模型路由。需要恢复配置时使用自己的备份。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 排障
 

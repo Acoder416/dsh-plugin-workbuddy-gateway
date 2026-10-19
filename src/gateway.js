@@ -285,6 +285,9 @@ export class Gateway {
           ACCOUNTS_DIR: paths.accountsDir,
           WB_PROXY_USAGE_DIR: paths.usageDir,
           WB_PROXY_REALM: settings.realm ?? '',
+          WB_GROWTH_CHECKIN_ENABLED: settings.autoGrowthCheckin === true ? '1' : '0',
+          WB_GROWTH_CHECKIN_RETRY_SECONDS: String(settings.growthCheckinRetrySeconds ?? 300),
+          WB_GROWTH_CHECKIN_MAX_CHECKS: String(settings.growthCheckinMaxChecks ?? 3),
           // Keep Python from buffering the readiness line behind its stdio.
           PYTHONUNBUFFERED: '1',
           PYTHONIOENCODING: 'utf-8',

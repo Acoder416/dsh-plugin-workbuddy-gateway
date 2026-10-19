@@ -102,6 +102,19 @@ test('start passes the port, the api key, and the state-redirect env', async () 
   // Mutable gateway state must never land in the checkout.
   assert.equal(call.options.env.ACCOUNTS_DIR, 'C:/home/workbuddy/accounts')
   assert.equal(call.options.env.WB_PROXY_USAGE_DIR, 'C:/home/workbuddy/usage')
+  assert.equal(call.options.env.WB_GROWTH_CHECKIN_ENABLED, '0')
+})
+
+test('growth automation and its verification budget reach the child at startup', async () => {
+  const { gateway, spawner } = harness({ settings: { ...SETTINGS, autoGrowthCheckin: true,
+    growthCheckinRetrySeconds: 60, growthCheckinMaxChecks: 4 } })
+  const started = gateway.start()
+  spawner.last().announceReady()
+  await started
+  const env = spawner.calls[0].options.env
+  assert.equal(env.WB_GROWTH_CHECKIN_ENABLED, '1')
+  assert.equal(env.WB_GROWTH_CHECKIN_RETRY_SECONDS, '60')
+  assert.equal(env.WB_GROWTH_CHECKIN_MAX_CHECKS, '4')
 })
 
 test('no --api-key argument is passed when no token is configured', async () => {
