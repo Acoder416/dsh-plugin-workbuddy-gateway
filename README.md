@@ -4,7 +4,7 @@
 
 中文 | [English](README.en.md)
 
-**当前版本：0.2.6。** 安装建议固定到 Git 标签 `v0.2.6`；回退方法见下文。此仓库提供源码安装，不要求安装插件市场。
+**当前版本：0.3.0。** 已适配新版 Config 设置接口，并通过 Windows 官方安装版 DSH `0.2.1-rc.2` 的配置读写、模型路由及重启验证。安装请固定到 Git 标签 `v0.3.0`。此仓库提供源码安装，不要求安装插件市场。
 
 ## 功能
 
@@ -42,7 +42,7 @@ Windows 自动尝试 `python`、`python3`；macOS / Linux 自动尝试 `python3`
 ### 方式一：直接安装固定版本
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
 ```
 
 这个命令安装包依赖，**还需要启用插件**：编辑 profile 的 `package.json`，在现有 `dsh.profile.bundles` 数组末尾添加 `dsh-plugin-workbuddy-gateway`。保留原有字段和其他 bundle，下面仅展示相关部分：
@@ -68,7 +68,7 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 适合希望保留源码、手动更新或调试的用户。将源码放在长期保留的目录，后续不要删除或移动它。
 
 ```sh
-git clone --branch v0.2.6 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.3.0 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -137,7 +137,9 @@ pnpm --dir "$dsh_profile_dir" add "link:$dsh_plugin_dir"
 
 设置保存在 `workbuddy-gateway` 命名空间：`autoGrowthCheckin` 是独立开关；`growthCheckinRetrySeconds` 默认 `300`，范围 `30–3600`；`growthCheckinMaxChecks` 默认 `3`，范围 `1–10`。设置页切换开关立即更新运行中的内置网关；直接修改配置文件在重启后应用。新功能需要更新插件并重启 DSH；自定义 `gatewayDir` 也必须提供相应调度接口。
 
-插件兼容新版 DSH 的 profile Config 表单和旧版设置分区。新版 DSH 把设置写入当前 profile 的 `cordis.patch.yml`。开发验证可运行 `node --expose-internals tests/integration-growth-settings.mjs <已构建的DSH仓库路径>`，它使用临时 profile，不启动 Web 服务或读取真实账号。
+插件兼容新版 DSH 的 profile Config 表单和旧版设置分区。新版通过导出的 volatile `Config` 和 `settings.configure()` 注册页面，按实际插件 entry id 更新配置，并将设置写入当前 profile 的 `cordis.patch.yml`；只有提供 `installSection()` 的旧宿主才使用该接口。配置监听跟随插件实例，在设置服务替换时不会重复注册。
+
+在源码目录运行 `node scripts/verify-profile-settings.mjs <已构建的dsh-CLI.js或桌面版dsh.cmd路径>` 可验证真实宿主的加载、HTTP 配置读写、外部修改、模型路由和重启恢复。测试使用临时 profile、临时 HTTP 端口和空凭据，不启动网关、不读取真实账号，也不调用模型。
 
 ### 桌面端凭证目录
 
@@ -201,11 +203,11 @@ WorkBuddy 桌面端不必常驻。网关独立保存导入后的凭证；退出�
 直接安装方式：
 
 ```sh
-# 安装最终版
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
+# 安装当前版本
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
 
-# 回退到上一版标签
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.5"
+# 回退（仅适用于仍提供旧设置接口的 DSH）
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
 ```
 
 本地 `link:` 方式，在插件源码目录执行：
@@ -213,13 +215,13 @@ dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.6
-# 回退时改为：git switch --detach v0.2.5
+git switch --detach v0.3.0
+# 旧宿主回退时改为：git switch --detach v0.2.6
 ```
 
 如果存在本地修改，先自行保存，避免覆盖。切换版本后重启 DSH 并刷新页面。`link:` 安装的版本由本地目录决定，重新安装其他目录中的副本不会更新正在使用的插件。
 
-回退代码不会撤销积分领取、还原账号操作或自动恢复模型路由。需要恢复配置时使用自己的备份。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
+DSH `0.2.1-rc.2` 不支持 `v0.2.6` 使用的旧设置接口，请保留 `v0.3.0`。回退代码不会撤销积分领取、还原账号操作或自动恢复模型路由。需要恢复配置时使用自己的备份。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 排障
 

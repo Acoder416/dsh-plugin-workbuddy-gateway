@@ -4,7 +4,7 @@ Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model rout
 
 [中文](README.md) | English
 
-**Version: 0.2.6.** Install from the fixed Git tag `v0.2.6`; `v0.2.5` remains available for rollback. No plugin market is required.
+**Version: 0.3.0.** Supports the current Config-based Settings API, verified against the official Windows DSH `0.2.1-rc.2` installation for settings edits, provider writes and restart persistence. Install from the fixed Git tag `v0.3.0`. No plugin market is required.
 
 This is an unofficial integration using WorkBuddy subscription endpoints and DSH internal APIs. Those interfaces can change, and using them may violate service terms or trigger account restrictions.
 
@@ -24,7 +24,7 @@ Python detection tries `python`, then `python3` on Windows, and the reverse orde
 Use an existing, initialized web profile:
 
 ```sh
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
 ```
 
 Then append `dsh-plugin-workbuddy-gateway` to the existing `dsh.profile.bundles` array in the profile's `package.json`. Preserve its other entries. The default profile directory is `~/.dsh/profiles/web`, or `$DSH_HOME/profiles/web` when configured.
@@ -50,7 +50,7 @@ Restart **DSH itself**, then refresh the browser. Restarting only the Python gat
 Keep the checkout in a permanent directory:
 
 ```sh
-git clone --branch v0.2.6 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
+git clone --branch v0.3.0 https://github.com/Acoder416/dsh-plugin-workbuddy-gateway.git
 cd dsh-plugin-workbuddy-gateway
 npm run preflight
 ```
@@ -115,7 +115,9 @@ The activity calendar uses Asia/Shanghai. Admission is saved before sending, all
 
 The `workbuddy-gateway` settings namespace exposes `autoGrowthCheckin` (default `false`), `growthCheckinRetrySeconds` (default `300`, range `30–3600`), and `growthCheckinMaxChecks` (default `3`, range `1–10`). The settings-page switch updates the running bundled gateway; file edits apply on restart. Upgrade the plugin and restart DSH for this feature. A custom `gatewayDir` must also implement its scheduler endpoint.
 
-The plugin supports current profile Config forms and legacy settings sections. Current DSH persists changes in the profile's `cordis.patch.yml`. Developers can run `node --expose-internals tests/integration-growth-settings.mjs <built-DSH-checkout>` against a disposable profile; this check does not launch a Web server or read real accounts.
+The plugin supports current profile Config forms and legacy settings sections. Current hosts use the exported volatile `Config` and `settings.configure()`, address edits by the actual plugin entry id, and persist changes in the profile's `cordis.patch.yml`. Only legacy hosts that provide `installSection()` use that API. The configuration listener belongs to the plugin instance and is not duplicated when Settings is replaced.
+
+From the checkout, run `node scripts/verify-profile-settings.mjs <built-dsh-CLI.js-or-Desktop-dsh.cmd>` to check actual host loading, HTTP settings edits, external edits, provider writes and restart persistence. The check uses a temporary profile, temporary HTTP port and empty credentials. It does not start the gateway, read real accounts or call a model.
 
 Without a session binding, the gateway rotates across available accounts in the same realm. Bound sessions prefer their existing account. HTTP 429 or upstream business code 6004 records a restriction for that account and model, then tries another eligible account in the same realm. Other models remain eligible. Reaching the deadline permits another attempt; it does not guarantee upstream acceptance. A positive credit balance does not rule out a model frequency limit.
 
@@ -161,10 +163,10 @@ The gateway API key is stored in DSH's credential store as `WORKBUDDY_API_KEY`. 
 Stop DSH and back up the profile configuration, lockfile, and WorkBuddy state before upgrading. Backups contain credentials and must stay private.
 
 ```sh
-# Install the final merged build
+# Install the current version
+dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.3.0"
+# Roll back only on a host that still provides the legacy Settings API
 dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.6"
-# Roll back
-dsh plugin --profile web add "github:Acoder416/dsh-plugin-workbuddy-gateway#v0.2.5"
 ```
 
 For a linked checkout:
@@ -172,11 +174,11 @@ For a linked checkout:
 ```sh
 git status --short
 git fetch origin --tags
-git switch --detach v0.2.6
-# To roll back: git switch --detach v0.2.5
+git switch --detach v0.3.0
+# To roll back on a legacy host: git switch --detach v0.2.6
 ```
 
-Preserve local changes before switching. Restart DSH and refresh the browser afterward. A linked installation follows that directory, not another checkout. Code rollback does not undo reward claims, account changes, or model-route writes. Restore your own configuration backup if needed. See [CHANGELOG.md](CHANGELOG.md).
+Preserve local changes before switching. Restart DSH and refresh the browser afterward. A linked installation follows that directory, not another checkout. Keep `v0.3.0` on DSH `0.2.1-rc.2`: that host does not provide the legacy Settings API used by `v0.2.6`. Code rollback does not undo reward claims, account changes, or model-route writes. Restore your own configuration backup if needed. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Troubleshooting and removal
 

@@ -57,7 +57,7 @@ export const name = 'dsh-plugin-workbuddy-gateway'
 export const inject = ['webServer', 'settings']
 
 /** Plugin build marker, surfaced by `/health` so a stale mount is visible. */
-export const PLUGIN_VERSION = '0.2.6'
+export const PLUGIN_VERSION = '0.3.0'
 
 /**
  * Register the gateway supervisor, its routes, and its settings section.
@@ -204,18 +204,21 @@ export function apply(ctx, config) {
     }
   }
 
-  // The settings section is wired FIRST, and its `installSection` resolves the
-  // section synchronously through `setSource`. The web-server block below reads
-  // `current.autoStart`, and a reversed order would compare the composition
-  // default instead of the user's choice.
+  // Loader targets the owning plugin fiber. Register once on that owner, even
+  // when the Settings service and its injected child are replaced.
+  if (typeof config?.get === 'function') {
+    ctx.on('loader/volatile-update', () => {
+      syncCurrent()
+      if (current.providerSync) void refreshBaseUrl()
+    })
+  }
+
+  // Resolve the persisted configuration before the web scope checks autoStart.
+  // Current hosts supply a live Config reference; legacy hosts supply a section.
   ctx.inject(['settings'], (settingsCtx) => {
     if (typeof settingsCtx.settings.installSection !== 'function') {
       settingsNamespace = ctx.fiber.entry?.options.id ?? SETTINGS_NAMESPACE
       settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
-      ctx.on('loader/volatile-update', () => {
-        syncCurrent()
-        if (current.providerSync) void refreshBaseUrl()
-      })
       syncCurrent()
       return
     }
@@ -250,9 +253,8 @@ export function apply(ctx, config) {
       gateway,
       settings: () => current,
       updateSettings: async (patch) => {
-        // `update` merges a partial patch into this namespace's user layer. The
-        // namespace is already registered by `installSection`, so registering
-        // again here would throw.
+        // Current forms are addressed by the actual Loader entry id. Legacy
+        // hosts use the explicitly registered section namespace.
         await webCtx.settings.update(settingsNamespace, patch)
         // Re-derive before this request's own snapshot runs. The scope watcher
         // that also does it is not ordered against this await, and a realm switch
