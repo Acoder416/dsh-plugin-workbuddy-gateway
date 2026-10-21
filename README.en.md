@@ -1,6 +1,6 @@
 # dsh-plugin-workbuddy-gateway
 
-Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model routes from **Settings → WorkBuddy**.
+Manage WorkBuddy accounts, a local OpenAI-compatible gateway, and DSH model routes from **Plugins → WorkBuddy**.
 
 [中文](README.md) | English
 
@@ -93,7 +93,7 @@ Changing realms updates the account list and model catalog. Automatic route main
 
 On startup and restart, the gateway applies the selected realm before listening and reports running only after confirmation. Failed confirmation stops the gateway and displays an error. The active realm is stored in `active_realm.json` inside the account directory and restored when no realm is selected.
 
-1. Open Settings → WorkBuddy and start the gateway (default `127.0.0.1:18088`).
+1. Open Plugins → WorkBuddy and start the gateway (default `127.0.0.1:18088`).
 2. Select the global or China realm.
 3. Scan and import a desktop credential, or complete browser OAuth.
 4. Check that the account is enabled and has credits.
@@ -182,7 +182,7 @@ Preserve local changes before switching. Restart DSH and refresh the browser aft
 
 ## Troubleshooting and removal
 
-- Missing settings page: check the installed dependency and bundle/patch entry, then restart DSH.
+- Missing WorkBuddy controls on the plugin detail page: check that DSH provides `plugins.bundle.config`, the installed dependency and bundle/patch entry, then restart DSH.
 - Changes not visible: confirm the profile points to the checkout you edited.
 - No Python: install Python 3.9+ or configure `pythonPath`.
 - Port in use: identify the listener before stopping it; the gateway port and DSH Web port are separate.

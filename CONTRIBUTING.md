@@ -87,7 +87,7 @@ This plugin uses DSH internals that are not a stable public contract:
 | `settings.update` on the plugin entry id and `settings.mutate` on `llm-pi-ai` | persist plugin settings and add/remove exactly one provider route |
 | `webServer.register` | the plugin's HTTP surface |
 | `credentials.resolve` / `set` / `unset` | hold the gateway's bearer token |
-| the `settings.section` client slot | render the settings page |
+| the keyed `plugins.bundle.config` client slot | render gateway controls on the bundle's Plugins page |
 
 A harness change to any of these can break this plugin without any change here.
 That is what the `integration` CI job exists to detect, and why its DSH revision
